@@ -55,7 +55,7 @@ export function NativeStartup() {
   };
 
   if (historyOpen && result && typeof result !== "string") {
-    return <><Backdrop /><NativeHistory today={result.today} onClose={() => setHistoryOpen(false)} /></>;
+    return <><Backdrop /><NativeHistory today={result.today} timezone={result.timezone} onClose={() => setHistoryOpen(false)} /></>;
   }
 
   return <>
@@ -79,7 +79,7 @@ export function NativeStartup() {
             {importing && <p role="status">Waiting for a backup from Files…</p>}
             {importError && <p className="error" role="alert">{importError}</p>}
           </>}
-          <p>Workout logging is planned for a later test build.</p>
+          {result.state !== "imported" && <p>Import a Rostam backup to start logging workouts.</p>}
         </>}
     </main>
   </>;

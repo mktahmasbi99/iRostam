@@ -3,7 +3,7 @@ import { DayPage } from "./DayPage";
 
 const CalendarPage = lazy(() => import("./CalendarPage").then((module) => ({ default: module.CalendarPage })));
 
-export function NativeHistory({ today, onClose }: { today: string; onClose: () => void }) {
+export function NativeHistory({ today, timezone, onClose }: { today: string; timezone: string; onClose: () => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const day = selected ?? today;
@@ -18,7 +18,7 @@ export function NativeHistory({ today, onClose }: { today: string; onClose: () =
       <button className="secondary" onClick={onClose}>Back to local storage</button>
     </div>
     <div className="content">
-      <DayPage key={day} day={day} today={today} readOnly
+      <DayPage key={day} day={day} today={today} timezone={timezone} offline
         onOpenCalendar={() => setCalendarOpen(true)}
         onPreviousDay={() => shift(-1)}
         onNextDay={() => shift(1)}

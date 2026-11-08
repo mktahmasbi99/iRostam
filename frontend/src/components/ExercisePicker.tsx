@@ -10,6 +10,7 @@ import { Modal } from "./Modal";
 import { ReadState } from "./ReadState";
 
 interface Props {
+  libraryOnly?: boolean;
   day: string;
   today?: string;
   presentIds: number[];
@@ -53,10 +54,10 @@ function exerciseRecommendationRuns(recommendations: ExerciseRecommendations): R
   }, []);
 }
 
-export function ExercisePicker({ day, today, presentIds, onChoose, onClose }: Props) {
+export function ExercisePicker({ day, today, presentIds, onChoose, onClose, libraryOnly = false }: Props) {
   const [view, setView] = useState<View>("library");
   const [rotation, setRotation] = useState<Rotation | null>(null);
-  const [loadingRotation, setLoadingRotation] = useState(true);
+  const [loadingRotation, setLoadingRotation] = useState(!libraryOnly);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [exercisesLoaded, setExercisesLoaded] = useState(false);
   const [loadingExercises, setLoadingExercises] = useState(false);
@@ -82,6 +83,7 @@ export function ExercisePicker({ day, today, presentIds, onChoose, onClose }: Pr
   const rotationMode = recommendationMode === "rotation";
 
   useEffect(() => {
+    if (libraryOnly) return;
     let active = true;
     api.rotations().then((items) => {
       if (!active) return;
@@ -98,7 +100,7 @@ export function ExercisePicker({ day, today, presentIds, onChoose, onClose }: Pr
     }).catch(() => { /* Library remains available if rotations cannot load. */ })
       .finally(() => active && setLoadingRotation(false));
     return () => { active = false; };
-  }, [day, today]);
+  }, [day, today, libraryOnly]);
 
   function selectRecommendationMode(mode: RecommendationMode) {
     restoringPreference.current = false;
@@ -241,9 +243,9 @@ export function ExercisePicker({ day, today, presentIds, onChoose, onClose }: Pr
   }
 
   return <Modal title="Add exercise" onClose={onClose} wide>
-    <div className="picker-toolbar"><label className="search-box"><Search /><span className="sr-only">Search exercises</span><input type="search" placeholder="Search exercises" value={query} onChange={(event) => { exerciseSearchController.current?.abort(); setImmediateQuery(null); setQuery(event.target.value); }} autoFocus /></label><button className="primary" onClick={() => setCreating(true)}><Plus />New exercise</button></div>
+    <div className="picker-toolbar"><label className="search-box"><Search /><span className="sr-only">Search exercises</span><input type="search" placeholder="Search exercises" value={query} onChange={(event) => { exerciseSearchController.current?.abort(); setImmediateQuery(null); setQuery(event.target.value); }} autoFocus /></label>{!libraryOnly && <button className="primary" onClick={() => setCreating(true)}><Plus />New exercise</button>}</div>
     <div className="filter-row" aria-label="Measurement filter"><button className={!filter ? "selected" : ""} onClick={() => { setImmediateQuery(query); setFilter(""); }}>All</button><button className={filter === "repetitions" ? "selected" : ""} onClick={() => { setImmediateQuery(query); setFilter("repetitions"); }}>Reps</button><button className={filter === "duration" ? "selected" : ""} onClick={() => { setImmediateQuery(query); setFilter("duration"); }}>Duration</button><button className={filter === "timed_repetitions" ? "selected" : ""} onClick={() => { setImmediateQuery(query); setFilter("timed_repetitions"); }}>Timed reps</button></div>
-    <button className="secondary recommendations-button icon-only-action" aria-label="Show recommendations" title="Show recommendations" onClick={() => { selectRecommendationMode(rotation ? "rotation" : "exercise"); setView("recommendations"); }}><Sparkles /></button>
+    {!libraryOnly && <button className="secondary recommendations-button icon-only-action" aria-label="Show recommendations" title="Show recommendations" onClick={() => { selectRecommendationMode(rotation ? "rotation" : "exercise"); setView("recommendations"); }}><Sparkles /></button>}
     {notice && <p className="notice" role="status">{notice}</p>}
     <ReadState loading={loadingExercises} error={error} hasData={exercisesLoaded} onRetry={() => setReadRetry((value) => value + 1)} loadingText="Loading exercises…" />
     <div className="exercise-results">

@@ -48,7 +48,7 @@ it("opens the imported calendar without fetching from the server", async () => {
   render(<NativeStartup />);
   await userEvent.click(await screen.findByRole("button", { name: "Open workout history" }));
   expect(await screen.findByText("No activity recorded")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Add to day" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Add to day" })).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "Choose a day" }));
   expect(await screen.findByText("November 2026")).toBeVisible();
   expect(history.mock.calls).toEqual([

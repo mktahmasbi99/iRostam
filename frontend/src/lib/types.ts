@@ -123,6 +123,7 @@ export interface ExerciseHistoryPage {
 }
 
 export interface WorkoutSummary {
+  timezone?: string;
   id: number;
   name: string;
   startedAt: string;

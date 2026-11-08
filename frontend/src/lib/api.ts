@@ -7,7 +7,18 @@ import { reportServerReachability, reportUncertainWrite, requireReachableServer,
 async function request<T>(path: string, init?: RequestInit, options: { clearDraftOnSuccess?: boolean } = {}): Promise<T> {
   const isWrite = Boolean(init?.method && !["GET", "HEAD"].includes(init.method.toUpperCase()));
   if (Capacitor.isNativePlatform()) {
-    if (isWrite) throw new Error("Editing is unavailable in this test build.");
+    if (isWrite) {
+      const payload: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      return trackWrite(() => nativeLedger.changeWorkout<T>({ path, method: init!.method!, payload }),
+        options.clearDraftOnSuccess !== false);
+    }
+    if (path === "/api/config") {
+      const { today, timezone } = await nativeLedger.startup({ create: false });
+      return { today, timezone, version: "0.4.0" } as T;
+    }
+    if (path.startsWith("/api/exercises?")) {
+      return (await nativeLedger.history<{ items: T }>({ path })).items;
+    }
     init?.signal?.throwIfAborted();
     const result = await nativeLedger.history<T>({ path });
     init?.signal?.throwIfAborted();

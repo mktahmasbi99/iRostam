@@ -5,7 +5,7 @@ extension LocalLedger {
     typealias Row = [String: Any]
 
     // Format 1 backups do not carry the server timezone. The deployed source used Warsaw.
-    private static let legacyZone = TimeZone(identifier: "Europe/Warsaw")!
+    static let legacyZone = TimeZone(identifier: "Europe/Warsaw")!
 
     func history(_ path: String) throws -> Row {
         guard let url = URLComponents(string: path) else { throw Failure.database }
@@ -19,13 +19,13 @@ extension LocalLedger {
                     throw Failure.database
                 }
                 let sessions = try Self.rows(db, Self.workoutSummaries + """
-                    WHERE (w.started_at >= ? AND w.started_at < ?)
+                    WHERE w.native_day = ? OR (w.native_day IS NULL AND w.started_at >= ? AND w.started_at < ?)
                     OR EXISTS (
                         SELECT 1 FROM workout_exercises x JOIN exercise_sets s ON s.workout_exercise_id = x.id
                         WHERE x.workout_id = w.id AND s.entry_date = ?
                     )
                     ORDER BY w.started_at, w.id
-                    """, [Self.utcBoundary(start), Self.utcBoundary(end), day])
+                    """, [day, Self.utcBoundary(start), Self.utcBoundary(end), day])
                 let exercises = try Self.rows(db, Self.exerciseFields + """
                     JOIN day_exercises d ON d.exercise_id = e.id WHERE d.entry_date = ? ORDER BY d.display_order
                     """, [day])
@@ -35,7 +35,8 @@ extension LocalLedger {
                     if sets.isEmpty { return nil }
                     return ["exercise": exercise, "displayOrder": index, "sets": sets, "total": Self.total(sets)]
                 }
-                return ["date": day, "sections": sections, "workouts": sessions]
+                let active = try Self.rows(db, Self.workoutSummaries + "WHERE w.ended_at IS NULL").first
+                return ["date": day, "sections": sections, "workouts": sessions, "activeWorkout": active as Any? ?? NSNull()]
             }
             if route.count == 3, route.prefix(2) == ["api", "calendar"] {
                 let month = route[2]
@@ -47,14 +48,49 @@ extension LocalLedger {
                     SELECT DISTINCT entry_date FROM exercise_sets WHERE entry_date LIKE ?
                     """, [month + "-%"])
                 var active = Set(dates.compactMap { $0["entry_date"] as? String })
+                let localWorkouts = try Self.rows(db, "SELECT native_day FROM workouts WHERE native_day LIKE ?", [month + "-%"])
+                active.formUnion(localWorkouts.compactMap { $0["native_day"] as? String })
                 for table in ["workouts", "activity_entries"] {
+                    let legacyOnly = table == "workouts" ? " AND native_day IS NULL" : ""
                     let rows = try Self.rows(db, """
-                        SELECT started_at FROM \(table) WHERE started_at >= ? AND started_at < ?
+                        SELECT started_at FROM \(table) WHERE started_at >= ? AND started_at < ?\(legacyOnly)
                         """, [Self.utcBoundary(start), Self.utcBoundary(end)])
                     active.formUnion(rows.compactMap { Self.localTimestamp($0["started_at"], format: "yyyy-MM-dd") })
                 }
                 let today = Self.dateFormatter("yyyy-MM-dd", zone: .current).string(from: Date())
                 return ["month": month, "activeDates": active.filter { $0 <= today }.sorted()]
+            }
+            if route == ["api", "exercises"] {
+                let filter = query.first { $0.name == "measurementType" }?.value ?? ""
+                let term = query.first { $0.name == "query" }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let exercises = try Self.rows(db, Self.exerciseFields + """
+                    WHERE e.archived_at IS NULL AND (? = '' OR e.measurement_type = ?) ORDER BY e.name COLLATE NOCASE
+                    """, [filter, filter])
+                return ["items": exercises.filter {
+                    term.isEmpty || ($0["name"] as? String)?.localizedStandardContains(term) == true
+                }]
+            }
+            if route.count == 4, route.prefix(2) == ["api", "exercises"],
+               route[3] == "prefill", let id = Int(route[2]) {
+                let day = query.first { $0.name == "day" }?.value ?? ""
+                let time = query.first { $0.name == "time" }?.value
+                let zone = TimeZone.current
+                let now = Date()
+                let today = Self.dateFormatter("yyyy-MM-dd", zone: zone).string(from: now)
+                let local = time.map { day + "T" + $0 } ?? (day == today ? nil :
+                    day + "T" + Self.dateFormatter("HH:mm", zone: zone).string(from: now))
+                let boundary = try Self.instant(local, zone: zone, now: now, allowFuture: true)
+                let latest = """
+                    id = (SELECT id FROM exercise_sets WHERE exercise_id = ? AND occurred_at < ?
+                        ORDER BY occurred_at DESC, created_at DESC, id DESC LIMIT 1)
+                    """
+                if var previous = try Self.sets(db, latest, [id, boundary]).first {
+                    previous["source"] = "previous"
+                    return previous
+                }
+                return ["source": "defaults", "repetitions": NSNull(), "durationMinutes": NSNull(),
+                        "durationSeconds": NSNull(), "holdMinutes": NSNull(), "holdSeconds": NSNull(),
+                        "resistanceKind": "external", "weightKg": NSNull()]
             }
             if route.count == 4, route.prefix(2) == ["api", "exercises"],
                route[3] == "history", let exercise = Int(route[2]) {
@@ -73,28 +109,32 @@ extension LocalLedger {
                 return ["sessions": sessions, "nextBeforeDate": next ?? NSNull()]
             }
             if route.count == 3, route.prefix(2) == ["api", "workouts"], let id = Int(route[2]) {
-                guard var workout = try Self.rows(db, Self.workoutSummaries + "WHERE w.id = ?", [id]).first else {
-                    throw Failure.database
-                }
-                let entries = try Self.rows(db, """
-                    SELECT id, exercise_id, position FROM workout_exercises WHERE workout_id = ? ORDER BY position, id
-                    """, [id])
-                workout["exercises"] = try entries.map { entry -> Row in
-                    guard let entryID = entry["id"] as? Int, let exerciseID = entry["exercise_id"] as? Int,
-                          let exercise = try Self.rows(db, Self.exerciseFields + "WHERE e.id = ?", [exerciseID]).first else {
-                        throw Failure.database
-                    }
-                    let sets = try Self.sets(db, "workout_exercise_id = ?", [entryID])
-                    return ["id": entryID, "position": entry["position"] ?? 0, "exercise": exercise, "sets": sets]
-                }
-                return workout
+                return try Self.workout(db, id)
             }
             throw Failure.database
         }
     }
 
+    static func workout(_ db: OpaquePointer, _ id: Int) throws -> Row {
+        guard var workout = try Self.rows(db, Self.workoutSummaries + "WHERE w.id = ?", [id]).first else {
+            throw Failure.database
+        }
+        let entries = try Self.rows(db, """
+            SELECT id, exercise_id, position FROM workout_exercises WHERE workout_id = ? ORDER BY position, id
+            """, [id])
+        workout["exercises"] = try entries.map { entry -> Row in
+            guard let entryID = entry["id"] as? Int, let exerciseID = entry["exercise_id"] as? Int,
+                  let exercise = try Self.rows(db, Self.exerciseFields + "WHERE e.id = ?", [exerciseID]).first else {
+                throw Failure.database
+            }
+            let sets = try Self.sets(db, "workout_exercise_id = ?", [entryID])
+            return ["id": entryID, "position": entry["position"] ?? 0, "exercise": exercise, "sets": sets]
+        }
+        return workout
+    }
+
     private static let workoutSummaries = """
-        SELECT w.id, w.name, w.started_at AS startedAt, w.ended_at AS endedAt,
+        SELECT w.id, w.name, w.started_at AS startedAt, w.ended_at AS endedAt, COALESCE(w.native_zone, 'Europe/Warsaw') AS timezone,
             (SELECT count(*) FROM workout_exercises x WHERE x.workout_id = w.id) AS exerciseCount,
             (SELECT count(*) FROM workout_exercises x JOIN exercise_sets s ON s.workout_exercise_id = x.id
                 WHERE x.workout_id = w.id) AS setCount
@@ -111,7 +151,7 @@ extension LocalLedger {
 
         """
 
-    private static func sets(_ db: OpaquePointer, _ filter: String, _ parameters: [Any]) throws -> [Row] {
+    static func sets(_ db: OpaquePointer, _ filter: String, _ parameters: [Any]) throws -> [Row] {
         try rows(db, """
             SELECT id, exercise_id AS exerciseId, workout_exercise_id AS workoutExerciseId,
                 entry_date AS date, occurred_at AS occurredAt, repetitions,
@@ -121,11 +161,12 @@ extension LocalLedger {
                 CASE WHEN weight_grams IS NOT NULL
                     THEN rtrim(rtrim(printf('%.3f', weight_grams / 1000.0), '0'), '.')
                 END AS weightKg,
-                equipment, custom_equipment AS customEquipment, created_at AS createdAt
+                equipment, custom_equipment AS customEquipment, created_at AS createdAt, native_zone
             FROM exercise_sets WHERE \(filter) ORDER BY occurred_at, created_at, id
             """, parameters).map { row in
                 var set = row
-                set["time"] = localTimestamp(row["occurredAt"], format: "HH:mm") ?? ""
+                let zone = (set.removeValue(forKey: "native_zone") as? String).flatMap(TimeZone.init(identifier:)) ?? legacyZone
+                set["time"] = localTimestamp(row["occurredAt"], format: "HH:mm", zone: zone) ?? ""
                 return set
             }
     }
@@ -142,7 +183,7 @@ extension LocalLedger {
         return calendar
     }
 
-    private static func dateFormatter(_ format: String, zone: TimeZone) -> DateFormatter {
+    static func dateFormatter(_ format: String, zone: TimeZone) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -161,7 +202,7 @@ extension LocalLedger {
         return date
     }
 
-    private static func localTimestamp(_ value: Any?, format: String) -> String? {
+    static func localTimestamp(_ value: Any?, format: String, zone: TimeZone = legacyZone) -> String? {
         guard let timestamp = value as? String else { return nil }
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -170,10 +211,10 @@ extension LocalLedger {
             iso.formatOptions = [.withInternetDateTime]
             date = iso.date(from: timestamp)
         }
-        return date.map { dateFormatter(format, zone: legacyZone).string(from: $0) }
+        return date.map { dateFormatter(format, zone: zone).string(from: $0) }
     }
 
-    private static func rows(_ db: OpaquePointer, _ sql: String, _ parameters: [Any] = []) throws -> [Row] {
+    static func rows(_ db: OpaquePointer, _ sql: String, _ parameters: [Any] = []) throws -> [Row] {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK,
               let statement else { throw Failure.database }
@@ -183,6 +224,8 @@ extension LocalLedger {
             let result: Int32
             if let number = value as? Int {
                 result = sqlite3_bind_int64(statement, position, Int64(number))
+            } else if value is NSNull {
+                result = sqlite3_bind_null(statement, position)
             } else if let text = value as? String {
                 result = sqlite3_bind_text(statement, position, text, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
             } else {

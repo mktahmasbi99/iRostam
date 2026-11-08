@@ -146,7 +146,7 @@ struct LocalLedger {
         let result = sqlite3_open_v2(url.path, &handle, flags, nil)
         defer { sqlite3_close(handle) }
         guard result == SQLITE_OK, let database = handle else { throw Failure.database }
-        guard sqlite3_exec(database, "PRAGMA trusted_schema = OFF", nil, nil, nil) == SQLITE_OK else {
+        guard sqlite3_exec(database, "PRAGMA trusted_schema = OFF; PRAGMA foreign_keys = ON", nil, nil, nil) == SQLITE_OK else {
             throw Failure.database
         }
         return try operation(database)

@@ -15,6 +15,7 @@ class LocalLedgerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
     let jsName = "LocalLedger"
     let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "startup", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "changeWorkout", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "history", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "importBackup", returnType: CAPPluginReturnPromise)
     ]
@@ -49,6 +50,7 @@ class LocalLedgerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
                     "timezone": timezone.identifier
                 ]
                 if state == .imported {
+                    try ledger.prepareWorkouts()
                     let counts = try ledger.importedCounts()
                     result["workouts"] = counts.workouts
                     result["sets"] = counts.sets
@@ -71,6 +73,23 @@ class LocalLedgerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
                 call.resolve(try self.ledger().history(path))
             } catch {
                 call.reject("Could not read this entry from the local database.")
+            }
+        }
+    }
+
+    @objc func changeWorkout(_ call: CAPPluginCall) {
+        guard let path = call.getString("path"), let method = call.getString("method") else {
+            call.reject("Missing workout action.")
+            return
+        }
+        let payload = call.getObject("payload") ?? [:]
+        storage.async {
+            do {
+                call.resolve(try self.ledger().changeWorkout(path, method: method, payload: payload))
+            } catch let error as LocalLedger.WorkoutError {
+                call.reject(error.localizedDescription)
+            } catch {
+                call.reject("Could not save this workout change.")
             }
         }
     }
