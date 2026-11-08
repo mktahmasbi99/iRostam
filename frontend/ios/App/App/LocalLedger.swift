@@ -139,7 +139,7 @@ struct LocalLedger {
         }
     }
 
-    private func withDatabase<T>(
+    func withDatabase<T>(
         at url: URL, flags: Int32, _ operation: (OpaquePointer) throws -> T
     ) throws -> T {
         var handle: OpaquePointer?

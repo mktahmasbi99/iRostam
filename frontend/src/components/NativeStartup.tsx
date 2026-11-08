@@ -1,27 +1,15 @@
-import { registerPlugin } from "@capacitor/core";
 import { useEffect, useState } from "react";
 import { Backdrop, Logo } from "../App";
-
-interface Startup {
-  state: "missing" | "empty" | "imported";
-  workouts?: number;
-  sets?: number;
-  photos?: number;
-  today: string;
-  timezone: string;
-}
-
-const ledger = registerPlugin<{
-  startup(options: { create: boolean }): Promise<Startup>;
-  importBackup(): Promise<{ imported: boolean }>;
-}>("LocalLedger");
+import { nativeLedger, type NativeStartupState } from "../lib/nativeLedger";
+import { NativeHistory } from "./NativeHistory";
 
 export function NativeStartup() {
   const [request, setRequest] = useState({ create: false });
-  const [result, setResult] = useState<Startup | string | null>(null);
+  const [result, setResult] = useState<NativeStartupState | string | null>(null);
 
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -30,7 +18,7 @@ export function NativeStartup() {
       if (busy) return;
       busy = true;
       try {
-        const startup = await ledger.startup({ create });
+        const startup = await nativeLedger.startup({ create });
         if (active) setResult(startup);
       } catch {
         if (active) setResult("Could not open the local iRostam database.");
@@ -58,13 +46,17 @@ export function NativeStartup() {
     setImportError("");
     setImporting(true);
     try {
-      if ((await ledger.importBackup()).imported) load(false);
+      if ((await nativeLedger.importBackup()).imported) load(false);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Could not import the Rostam backup.");
     } finally {
       setImporting(false);
     }
   };
+
+  if (historyOpen && result && typeof result !== "string") {
+    return <><Backdrop /><NativeHistory today={result.today} onClose={() => setHistoryOpen(false)} /></>;
+  }
 
   return <>
     <Backdrop />
@@ -78,7 +70,10 @@ export function NativeStartup() {
         </> : <>
           <p>{result.state === "imported" ? "Rostam backup imported." : result.state === "empty" ? "Local database ready." : "Set up local storage for iRostam."}</p>
           <p>{result.today} · {result.timezone}</p>
-          {result.state === "imported" ? <p>{result.workouts} workouts · {result.sets} sets · {result.photos} progress photos</p> : <>
+          {result.state === "imported" ? <>
+            <p>{result.workouts} workouts · {result.sets} sets · {result.photos} progress photos</p>
+            <button onClick={() => setHistoryOpen(true)}>Open workout history</button>
+          </> : <>
             <button disabled={importing} onClick={() => void importBackup()}>Import Rostam backup</button>
             {result.state === "missing" && <button disabled={importing} onClick={() => load(true)}>Create local database</button>}
             {importing && <p role="status">Waiting for a backup from Files…</p>}

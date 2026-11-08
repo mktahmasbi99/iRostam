@@ -1,9 +1,18 @@
+import { Capacitor } from "@capacitor/core";
+import { nativeLedger } from "./nativeLedger";
 import type { Workout, WorkoutSummary, WorkoutPayload, ExerciseSet, Activity, ActivityEntry, ActivityNoteGroup, ActivityNotePage, Backup, BackupSettings, BodyMeasurement, BodyMeasurementPage, BodyMeasurementPayload, Config, DailyNotePage, DailyPhoto, DayData, Exercise, ExerciseCreatePayload, ExerciseHistoryPage, ExerciseRecommendations, ExerciseUpdatePayload, MeasurementTrends, PhotoPage, Profile, ProfilePayload, RestoreResult, Rotation, RotationRecommendation, SetPayload } from "./types";
 import { trackWrite } from "./restartSafety";
 import { reportServerReachability, reportUncertainWrite, requireReachableServer, ServerConnectionError } from "./connectivity";
 
 async function request<T>(path: string, init?: RequestInit, options: { clearDraftOnSuccess?: boolean } = {}): Promise<T> {
   const isWrite = Boolean(init?.method && !["GET", "HEAD"].includes(init.method.toUpperCase()));
+  if (Capacitor.isNativePlatform()) {
+    if (isWrite) throw new Error("Editing is unavailable in this test build.");
+    init?.signal?.throwIfAborted();
+    const result = await nativeLedger.history<T>({ path });
+    init?.signal?.throwIfAborted();
+    return result;
+  }
   if (isWrite) requireReachableServer();
   const operation = () => fetch(path, {
     ...init,

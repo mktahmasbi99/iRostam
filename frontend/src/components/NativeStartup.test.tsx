@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { NativeStartup } from "./NativeStartup";
 
-const { startup, importBackup } = vi.hoisted(() => ({ startup: vi.fn(), importBackup: vi.fn() }));
-vi.mock("@capacitor/core", () => ({ registerPlugin: () => ({ startup, importBackup }) }));
+const { startup, importBackup, history } = vi.hoisted(() => ({ startup: vi.fn(), importBackup: vi.fn(), history: vi.fn() }));
+vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true }, registerPlugin: () => ({ startup, importBackup, history }) }));
 
 it("opens local storage and initializes it only on request", async () => {
   const device = { today: "2026-11-08", timezone: "Europe/Warsaw" };
@@ -36,4 +36,23 @@ it("keeps the local setup after a rejected import and shows counts after a valid
   await userEvent.click(button);
   expect(await screen.findByText("4 workouts · 12 sets · 2 progress photos")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Import Rostam backup" })).not.toBeInTheDocument();
+});
+
+it("opens the imported calendar without fetching from the server", async () => {
+  startup.mockResolvedValueOnce({
+    today: "2026-11-08", timezone: "Europe/Warsaw", state: "imported", workouts: 0, sets: 12, photos: 0,
+  });
+  history.mockResolvedValueOnce({ date: "2026-11-08", sections: [], workouts: [] })
+    .mockResolvedValueOnce({ month: "2026-11", activeDates: ["2026-11-07"] });
+
+  render(<NativeStartup />);
+  await userEvent.click(await screen.findByRole("button", { name: "Open workout history" }));
+  expect(await screen.findByText("No activity recorded")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Add to day" })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Choose a day" }));
+  expect(await screen.findByText("November 2026")).toBeVisible();
+  expect(history.mock.calls).toEqual([
+    [{ path: "/api/days/2026-11-08" }],
+    [{ path: "/api/calendar/2026-11" }],
+  ]);
 });

@@ -15,6 +15,7 @@ class LocalLedgerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
     let jsName = "LocalLedger"
     let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "startup", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "history", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "importBackup", returnType: CAPPluginReturnPromise)
     ]
 
@@ -56,6 +57,20 @@ class LocalLedgerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
                 call.resolve(result)
             } catch {
                 call.reject("Could not open the local iRostam database.")
+            }
+        }
+    }
+
+    @objc func history(_ call: CAPPluginCall) {
+        guard let path = call.getString("path") else {
+            call.reject("Missing local history path.")
+            return
+        }
+        storage.async {
+            do {
+                call.resolve(try self.ledger().history(path))
+            } catch {
+                call.reject("Could not read this entry from the local database.")
             }
         }
     }
