@@ -13,7 +13,7 @@ export function NativeHistory({ today, onClose }: { today: string; onClose: () =
     setSelected(date.toISOString().slice(0, 10));
   };
 
-  return <div data-rostam-app className="app-shell">
+  return <div data-rostam-app className="app-shell native-history">
     <div className="brand">
       <button className="secondary" onClick={onClose}>Back to local storage</button>
     </div>
