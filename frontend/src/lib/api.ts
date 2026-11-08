@@ -169,14 +169,34 @@ export const api = {
     Object.entries(options).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)); });
     return request<DailyNotePage>(`/api/notes?${params}`);
   },
-  dayPhotos: (day: string, signal?: AbortSignal) => request<DailyPhoto[]>(`/api/days/${day}/photos`, { signal }),
+  dayPhotos: async (day: string, signal?: AbortSignal) => {
+    const result = await request<DailyPhoto[] | { items: DailyPhoto[] }>(`/api/days/${day}/photos`, { signal });
+    return Array.isArray(result) ? result : result.items;
+  },
   photos: (options: { beforeDate?: string; limit?: number; signal?: AbortSignal } = {}) => {
     const params = new URLSearchParams();
     if (options.beforeDate) params.set("beforeDate", options.beforeDate);
     if (options.limit !== undefined) params.set("limit", String(options.limit));
     return request<PhotoPage>(`/api/photos?${params}`, { signal: options.signal });
   },
-  uploadPhotos: (day: string, files: File[]) => { const form = new FormData(); files.forEach((file) => form.append("files", file)); return request<DailyPhoto[]>(`/api/days/${day}/photos`, { method: "POST", body: form }); },
+  photoImage: async (id: number) => {
+    const { image } = await nativeLedger.history<{ image: string }>({ path: `/api/photos/${id}` });
+    return `data:image/jpeg;base64,${image}`;
+  },
+  uploadPhotos: async (day: string, files: File[]) => {
+    if (Capacitor.isNativePlatform()) {
+      const images = await Promise.all(files.map((file) => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Could not read photo."));
+        reader.onerror = () => reject(new Error("Could not read photo."));
+        reader.readAsDataURL(file);
+      })));
+      const result = await nativeLedger.changeWorkout<{ items: DailyPhoto[] }>({ path: `/api/days/${day}/photos`, method: "POST", payload: { images } });
+      return result.items;
+    }
+    const form = new FormData(); files.forEach((file) => form.append("files", file));
+    return request<DailyPhoto[]>(`/api/days/${day}/photos`, { method: "POST", body: form });
+  },
   deletePhoto: (id: number) => request<void>(`/api/photos/${id}`, { method: "DELETE" }),
   archiveExercise: (id: number) =>
     request<Exercise>(`/api/exercises/${id}/archive`, json("POST")),

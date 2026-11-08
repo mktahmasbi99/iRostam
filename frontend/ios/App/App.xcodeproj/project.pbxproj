@@ -22,6 +22,7 @@
 		A1123344556677889900000C /* LocalRotations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1123344556677889900000B /* LocalRotations.swift */; };
 		A1123344556677889900000E /* LocalPersonalData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1123344556677889900000D /* LocalPersonalData.swift */; };
 		A11233445566778899000008 /* LocalWorkouts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11233445566778899000007 /* LocalWorkouts.swift */; };
+		A11233445566778899000010 /* LocalPhotos.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1123344556677889900000F /* LocalPhotos.swift */; };
 		A11233445566778899000004 /* LocalLedgerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11233445566778899000003 /* LocalLedgerPlugin.swift */; };
 /* End PBXBuildFile section */
 
@@ -43,6 +44,7 @@
 		A1123344556677889900000B /* LocalRotations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRotations.swift; sourceTree = "<group>"; };
 		A1123344556677889900000D /* LocalPersonalData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPersonalData.swift; sourceTree = "<group>"; };
 		A11233445566778899000007 /* LocalWorkouts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalWorkouts.swift; sourceTree = "<group>"; };
+		A1123344556677889900000F /* LocalPhotos.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPhotos.swift; sourceTree = "<group>"; };
 		A11233445566778899000003 /* LocalLedgerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLedgerPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -84,6 +86,7 @@
 				A1123344556677889900000B /* LocalRotations.swift */,
 				A1123344556677889900000D /* LocalPersonalData.swift */,
 				A11233445566778899000007 /* LocalWorkouts.swift */,
+				A1123344556677889900000F /* LocalPhotos.swift */,
 				A11233445566778899000003 /* LocalLedgerPlugin.swift */,
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
@@ -186,6 +189,7 @@
 				A1123344556677889900000C /* LocalRotations.swift in Sources */,
 				A1123344556677889900000E /* LocalPersonalData.swift in Sources */,
 				A11233445566778899000008 /* LocalWorkouts.swift in Sources */,
+				A11233445566778899000010 /* LocalPhotos.swift in Sources */,
 				A11233445566778899000004 /* LocalLedgerPlugin.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);

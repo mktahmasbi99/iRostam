@@ -4,12 +4,14 @@ import { DayPage } from "./DayPage";
 const ExercisesPage = lazy(() => import("./ExercisesPage").then((module) => ({ default: module.ExercisesPage })));
 const RotationsPage = lazy(() => import("./RotationsPage").then((module) => ({ default: module.RotationsPage })));
 const CalendarPage = lazy(() => import("./CalendarPage").then((module) => ({ default: module.CalendarPage })));
+const PhotosPage = lazy(() => import("./PhotosPage").then((module) => ({ default: module.PhotosPage })));
 
 export function NativeHistory({ today, timezone, onClose }: { today: string; timezone: string; onClose: () => void }) {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [rotationsOpen, setRotationsOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [photosOpen, setPhotosOpen] = useState(false);
   const day = selected ?? today;
   const shift = (amount: number) => {
     const date = new Date(`${day}T12:00:00Z`);
@@ -26,9 +28,13 @@ export function NativeHistory({ today, timezone, onClose }: { today: string; tim
       <button className="secondary" onClick={() => { setRotationsOpen(!rotationsOpen); setLibraryOpen(false); }}>
         {rotationsOpen ? "Workout history" : "Rotations"}
       </button>
+      <button className="secondary" onClick={() => { setPhotosOpen(!photosOpen); setLibraryOpen(false); setRotationsOpen(false); }}>
+        {photosOpen ? "Workout history" : "Photos"}
+      </button>
     </div>
     <div className="content">
-      {rotationsOpen ? <Suspense fallback={<div role="status">Loading rotations…</div>}><RotationsPage /></Suspense>
+      {photosOpen ? <Suspense fallback={<div role="status">Loading photos…</div>}><PhotosPage today={today} onChooseDay={(date) => { setSelected(date); setPhotosOpen(false); }} /></Suspense>
+        : rotationsOpen ? <Suspense fallback={<div role="status">Loading rotations…</div>}><RotationsPage /></Suspense>
         : libraryOpen ? <Suspense fallback={<div role="status">Loading exercises…</div>}><ExercisesPage /></Suspense>
         : <DayPage key={day} day={day} today={today} timezone={timezone} offline
         onOpenCalendar={() => setCalendarOpen(true)}

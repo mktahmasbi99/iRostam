@@ -64,6 +64,12 @@ extension LocalLedger {
 
     func changeWorkout(_ path: String, method: String, payload: Row) throws -> Row {
         let route = path.split(separator: "/").map(String.init)
+        if route.count == 4, route.prefix(2) == ["api", "days"], route[3] == "photos", method == "POST" {
+            return try addPhotos(route[2], payload: payload)
+        }
+        if route.count == 3, route.prefix(2) == ["api", "photos"], method == "DELETE", let id = Int(route[2]) {
+            return try deletePhoto(id)
+        }
         if route.prefix(2) == ["api", "exercises"] {
             return try changeExercise(route, method: method, payload: payload)
         }

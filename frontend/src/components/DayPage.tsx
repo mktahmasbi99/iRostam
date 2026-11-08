@@ -203,7 +203,7 @@ export function DayPage({ day, today, timezone = "Europe/Warsaw", offline = fals
         {day < today && <button className="day-navigation" aria-label="Next day" title="Next day" onClick={onNextDay}><ChevronRight /></button>}
       </header>
 
-      {loaded && !offline && <div className="day-journal-actions"><Suspense fallback={<span className="deferred-loading" role="status">Loading journal…</span>}><DailyJournal day={day} today={today} note={data.dailyNote ?? null} photoCount={data.photoCount ?? 0} onChanged={() => void load()} /></Suspense></div>}
+      {loaded && <div className="day-journal-actions"><Suspense fallback={<span className="deferred-loading" role="status">Loading journal…</span>}><DailyJournal day={day} today={today} note={data.dailyNote ?? null} photoCount={data.photoCount ?? 0} onChanged={() => void load()} /></Suspense></div>}
 
       <ReadState loading={loading} error={error} hasData={loaded} onRetry={() => void load()} loadingText="Loading sets…" />
       {loaded && !loading && !error && data.sections.length === 0 && !(data.activities?.length) && !(data.workouts?.length) && !pendingExercise && <div className="empty-state"><picture><source type="image/webp" srcSet={artwork.logo.webp} sizes="76px" /><img className="app-logo empty-logo" src={artwork.logo.src} srcSet={artwork.logo.png} sizes="76px" alt="" /></picture><h2>No activity recorded</h2><p>{offline ? "Add an exercise or workout." : "Add an exercise, activity, or workout."}</p></div>}

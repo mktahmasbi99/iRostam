@@ -295,13 +295,13 @@ extension LocalLedger {
         name.precomposedStringWithCompatibilityMapping.lowercased(with: Locale(identifier: "en_US_POSIX"))
     }
 
-    private static func validDay(_ day: String) -> Bool {
+    static func validDay(_ day: String) -> Bool {
         let formatter = dateFormatter("yyyy-MM-dd", zone: .current)
         guard let date = formatter.date(from: day) else { return false }
         return formatter.string(from: date) == day
     }
 
-    private static func today() -> String { dateFormatter("yyyy-MM-dd", zone: .current).string(from: Date()) }
+    static func today() -> String { dateFormatter("yyyy-MM-dd", zone: .current).string(from: Date()) }
     private static func parseInstant(_ value: String) -> Date? {
         let format = ISO8601DateFormatter(); format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return format.date(from: value) ?? ISO8601DateFormatter().date(from: value)

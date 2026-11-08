@@ -26,6 +26,27 @@ extension LocalLedger {
         if route == ["api", "exercise-recommendations"] {
             return try exerciseRecommendations(path)
         }
+        if route.count == 4, route.prefix(2) == ["api", "days"], route[3] == "photos" {
+            return try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READONLY) { db in
+                ["items": try Self.photoSummaries(db, day: route[2])]
+            }
+        }
+        if route == ["api", "photos"] {
+            let before = query.first { $0.name == "beforeDate" }?.value
+            let limit = min(100, max(1, Int(query.first { $0.name == "limit" }?.value ?? "20") ?? 20))
+            return try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READONLY) { db in
+                let dates = try Self.rows(db, "SELECT DISTINCT entry_date FROM daily_photos WHERE (? IS NULL OR entry_date < ?) ORDER BY entry_date DESC LIMIT ?", [before as Any? ?? NSNull(), before as Any? ?? NSNull(), limit + 1])
+                let selected = dates.prefix(limit).compactMap { $0["entry_date"] as? String }
+                let items: [Row] = try selected.map { date in ["date": date, "photos": try Self.photoSummaries(db, day: date)] }
+                return ["items": items, "nextBeforeDate": dates.count > limit ? (selected.last ?? "") as Any : NSNull()]
+            }
+        }
+        if route.count == 3, route.prefix(2) == ["api", "photos"], let id = Int(route[2]) {
+            return try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READONLY) { db in
+                guard let bytes = try Self.rows(db, "SELECT jpeg FROM daily_photos WHERE id = ?", [id]).first?["jpeg"] as? Data else { throw WorkoutError("Photo not found.") }
+                return ["image": bytes.base64EncodedString()]
+            }
+        }
         return try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READONLY) { db in
             if route.count == 3, route.prefix(2) == ["api", "days"] {
                 let day = route[2]
@@ -53,7 +74,8 @@ extension LocalLedger {
                 let active = try Self.rows(db, Self.workoutSummaries + "WHERE w.ended_at IS NULL").first
                 let activities = try Self.activitiesForDay(db, day)
                 let note = try Self.rows(db, "SELECT body FROM daily_notes WHERE entry_date = ?", [day]).first?["body"]
-                return ["date": day, "sections": sections, "workouts": sessions, "activeWorkout": active as Any? ?? NSNull(), "activities": activities, "dailyNote": note as Any? ?? NSNull()]
+                let photoCount = try Self.rows(db, "SELECT count(*) AS count FROM daily_photos WHERE entry_date = ?", [day]).first?["count"] as? Int ?? 0
+                return ["date": day, "sections": sections, "workouts": sessions, "activeWorkout": active as Any? ?? NSNull(), "activities": activities, "dailyNote": note as Any? ?? NSNull(), "photoCount": photoCount]
             }
             if route.count == 3, route.prefix(2) == ["api", "calendar"] {
                 let month = route[2]
@@ -139,6 +161,13 @@ extension LocalLedger {
                 return try Self.workout(db, id)
             }
             throw Failure.database
+        }
+    }
+
+    static func photoSummaries(_ db: OpaquePointer, day: String) throws -> [Row] {
+        try rows(db, "SELECT id, entry_date, display_order, width, height, created_at, thumbnail_jpeg FROM daily_photos WHERE entry_date = ? ORDER BY display_order", [day]).map { row in
+            guard let thumb = row["thumbnail_jpeg"] as? Data else { throw Failure.database }
+            return ["id": row["id"]!, "date": day, "displayOrder": row["display_order"]!, "width": row["width"]!, "height": row["height"]!, "createdAt": row["created_at"]!, "url": "/api/photos/\(row["id"]!)", "thumbnailUrl": "data:image/jpeg;base64,\(thumb.base64EncodedString())"]
         }
     }
 
