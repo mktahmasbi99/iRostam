@@ -22,7 +22,7 @@ import { applyThemePreference, readThemePreference, saveThemePreference, systemT
 
 type Tab = "today" | "notes" | "photos" | "measurements" | "exercises" | "activities" | "rotations" | "settings";
 
-function Backdrop() {
+export function Backdrop() {
   return <picture className="site-backdrop">
     <source media="(max-width: 768px)" type="image/webp" srcSet={artwork.background768.webp} />
     <source media="(max-width: 768px)" type="image/jpeg" srcSet={artwork.background768.jpeg} />
@@ -31,7 +31,7 @@ function Backdrop() {
   </picture>;
 }
 
-function Logo({ className, sizes }: { className: string; sizes: string }) {
+export function Logo({ className, sizes }: { className: string; sizes: string }) {
   return <picture>
     <source type="image/webp" srcSet={artwork.logo.webp} sizes={sizes} />
     <img className={className} src={artwork.logo.src} srcSet={artwork.logo.png} sizes={sizes} alt="" />
