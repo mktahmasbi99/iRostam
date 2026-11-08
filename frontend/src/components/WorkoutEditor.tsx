@@ -77,8 +77,8 @@ function WorkoutTimeForm({ workout, timezone, onSave, onClose }: {
   </Modal>;
 }
 
-export function WorkoutEditor({ id, today, timezone: deviceTimezone, offline = false, onClose, onChanged }: {
-  id: number; today: string; timezone: string; offline?: boolean; onClose: () => void; onChanged: () => void;
+export function WorkoutEditor({ id, today, timezone: deviceTimezone, onClose, onChanged }: {
+  id: number; today: string; timezone: string; onClose: () => void; onChanged: () => void;
 }) {
   const [workout, setWorkout] = useState<Workout | null>(null);
   const timezone = workout?.timezone ?? deviceTimezone;
