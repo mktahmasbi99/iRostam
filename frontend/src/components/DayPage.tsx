@@ -139,7 +139,7 @@ export function DayPage({ day, today, timezone = "Europe/Warsaw", offline = fals
     setAddingTo(null);
     setEditingSet(null);
     try {
-      if (!offline && day === today) {
+      if (day === today) {
         const rotations = await api.rotations();
         const activeRotation = rotations.find((rotation) => rotation.active);
         if (activeRotation && !activeRotation.members.some((member) => member.exercise.id === exercise.id)) {
@@ -230,7 +230,7 @@ export function DayPage({ day, today, timezone = "Europe/Warsaw", offline = fals
       </div>}
       {exerciseChoiceError && <p className="error-panel exercise-choice-error" role="alert">Could not add this exercise: {exerciseChoiceError}</p>}
       {rotationPrompt && <Suspense fallback={null}><Modal title="Add this exercise to your active rotation?" onClose={() => { if (!rotationPromptBusy) setRotationPrompt(null); }}><div className="rotation-choice-dialog"><p>{rotationPrompt.exercise.name}</p>{rotationPromptError && <p className="error" role="alert">{rotationPromptError}</p>}<div className="draft-actions"><button type="button" disabled={rotationPromptBusy} onClick={() => { setPendingExercise(rotationPrompt.exercise); setRotationPrompt(null); }}>Just record it</button><button type="button" className="primary" disabled={rotationPromptBusy} onClick={() => void addExerciseToRotation()}>{rotationPromptBusy ? "Adding…" : "Add to rotation"}</button></div></div></Modal></Suspense>}
-      {pickerOpen && <Suspense fallback={<div className="deferred-loading" role="status">Loading exercise picker…</div>}><ExercisePicker libraryOnly={offline} day={day} today={today} presentIds={[...presentIds, ...(pendingExercise ? [pendingExercise.id] : [])]} onClose={() => { setPickerOpen(false); addTriggerRef.current?.focus(); }} onChoose={(exercise) => void chooseExercise(exercise)} /></Suspense>}
+      {pickerOpen && <Suspense fallback={<div className="deferred-loading" role="status">Loading exercise picker…</div>}><ExercisePicker rotationOnly={offline} day={day} today={today} presentIds={[...presentIds, ...(pendingExercise ? [pendingExercise.id] : [])]} onClose={() => { setPickerOpen(false); addTriggerRef.current?.focus(); }} onChoose={(exercise) => void chooseExercise(exercise)} /></Suspense>}
       {activityPickerOpen && <Suspense fallback={<div className="deferred-loading" role="status">Loading activity picker…</div>}><ActivityPicker day={day} timezone={timezone} onClose={() => { setActivityPickerOpen(false); addTriggerRef.current?.focus(); }} onStarted={() => { setActivityPickerOpen(false); addTriggerRef.current?.focus(); void load(); }} /></Suspense>}
       <div className="day-add-actions floating-create-action" ref={addMenuRef} onKeyDown={handleAddMenuKeyDown}>
         {addMenuOpen && <div id="day-add-menu" className="day-add-menu" role="menu" aria-label="Add to day">

@@ -67,6 +67,9 @@ extension LocalLedger {
         if route.prefix(2) == ["api", "exercises"] {
             return try changeExercise(route, method: method, payload: payload)
         }
+        if route.prefix(2) == ["api", "rotations"] {
+            return try changeRotation(path, method: method, payload: payload)
+        }
         if route == ["api", "exercise-images"], method == "POST", let encoded = payload["image"] as? String {
             return try storeExerciseImage(encoded)
         }
@@ -92,6 +95,8 @@ extension LocalLedger {
                 if method == "DELETE" {
                     _ = try Self.rows(db, "DELETE FROM exercise_sets WHERE id = ?", [id])
                     if current["workout_exercise_id"] is NSNull {
+                        let day = current["entry_date"] as? String ?? ""
+                        try Self.updateActiveRotationAfterSet(db, day: day)
                         _ = try Self.rows(db, """
                             DELETE FROM day_exercises WHERE entry_date = ? AND exercise_id = ?
                             AND NOT EXISTS (SELECT 1 FROM exercise_sets WHERE entry_date = day_exercises.entry_date
@@ -322,6 +327,9 @@ extension LocalLedger {
             setID = Int(sqlite3_last_insert_rowid(db))
         }
         guard let result = try sets(db, "id = ?", [setID]).first else { throw Failure.database }
+        if member == nil, date == Self.dateFormatter("yyyy-MM-dd", zone: .current).string(from: Date()) {
+            try Self.updateActiveRotationAfterSet(db, day: date)
+        }
         return result
     }
 }

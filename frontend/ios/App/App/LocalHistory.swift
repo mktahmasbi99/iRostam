@@ -11,6 +11,13 @@ extension LocalLedger {
         guard let url = URLComponents(string: path) else { throw Failure.database }
         let route = url.path.split(separator: "/").map(String.init)
         let query = url.queryItems ?? []
+        if route == ["api", "rotations"] {
+            return ["items": try rotationList(query.first(where: { $0.name == "status" })?.value ?? "active")]
+        }
+        if route == ["api", "rotation-recommendations"] {
+            let days = Int(query.first(where: { $0.name == "days" })?.value ?? "") ?? 7
+            return ["items": try rotationRecommendations(days)]
+        }
         return try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READONLY) { db in
             if route.count == 3, route.prefix(2) == ["api", "days"] {
                 let day = route[2]

@@ -328,6 +328,7 @@ fieldset.dialog-content-controls { display: contents; min-width: 0; margin: 0; p
 .filter-row button.selected { color: var(--accent-dark); background: var(--accent-soft); }
 .recommendations-button { width: 100%; min-height: 42px; margin-bottom: 4px; }
 .recommendation-toolbar { display: flex; justify-content: space-between; gap: 9px; }
+.picker-create-icon { width: 52px; min-width: 52px; height: 52px; min-height: 52px; padding: 0; }
 .recommendation-mode { margin-top: 14px; }
 .recommendation-intro { margin: 14px 0 8px; color: var(--muted); font-size: .9rem; }
 .recommendation-paused { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; color: var(--muted); font-size: .86rem; }
