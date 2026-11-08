@@ -14,8 +14,8 @@ export function NativeHistory({ today, timezone, onClose }: { today: string; tim
   };
 
   return <div data-rostam-app className="app-shell native-history">
-    <div className="brand">
-      <button className="secondary" onClick={onClose}>Back to local storage</button>
+    <div className="native-history-controls content">
+      <button className="secondary" onClick={onClose}>Backups and local storage</button>
     </div>
     <div className="content">
       <DayPage key={day} day={day} today={today} timezone={timezone} offline

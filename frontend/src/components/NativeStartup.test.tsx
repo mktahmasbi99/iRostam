@@ -1,10 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { NativeStartup } from "./NativeStartup";
 
-const { startup, importBackup, history } = vi.hoisted(() => ({ startup: vi.fn(), importBackup: vi.fn(), history: vi.fn() }));
-vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true }, registerPlugin: () => ({ startup, importBackup, history }) }));
+const { startup, importBackup, history, exportBackup } = vi.hoisted(() => ({
+  startup: vi.fn(), importBackup: vi.fn(), history: vi.fn(), exportBackup: vi.fn(),
+}));
+vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true }, registerPlugin: () => ({ startup, importBackup, history, exportBackup }) }));
+
+beforeEach(() => vi.clearAllMocks());
 
 it("opens local storage and initializes it only on request", async () => {
   const device = { today: "2026-11-08", timezone: "Europe/Warsaw" };
@@ -55,4 +59,26 @@ it("opens the imported calendar without fetching from the server", async () => {
     [{ path: "/api/days/2026-11-08" }],
     [{ path: "/api/calendar/2026-11" }],
   ]);
+});
+
+it("exports to Files and opens restore only after confirmation", async () => {
+  const user = userEvent.setup();
+  const state = { today: "2026-11-08", timezone: "Europe/Warsaw", state: "imported", workouts: 1, sets: 4, photos: 0 };
+  startup.mockResolvedValueOnce(state);
+  exportBackup.mockResolvedValueOnce({ saved: true });
+  importBackup.mockResolvedValueOnce({ imported: false });
+
+  render(<NativeStartup />);
+  await user.click(await screen.findByRole("button", { name: "Back Up Now" }));
+  expect(await screen.findByText("Backup saved to Files.")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Restore from Files" }));
+  let dialog = screen.getByRole("dialog", { name: "Replace the local ledger?" });
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(importBackup).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole("button", { name: "Restore from Files" }));
+  dialog = screen.getByRole("dialog", { name: "Replace the local ledger?" });
+  await user.click(within(dialog).getByRole("button", { name: "Choose Backup" }));
+  expect(importBackup).toHaveBeenCalledExactlyOnceWith({ replacing: true });
+  expect(screen.getByText("1 workouts · 4 sets · 0 progress photos")).toBeVisible();
 });

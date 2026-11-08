@@ -48,6 +48,7 @@ h1, h2, h3 { color: var(--heading); }
 
 .app-shell { min-height: 100vh; padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
 .app-shell.native-history { padding-top: env(safe-area-inset-top, 0px); }
+.native-history-controls { padding: 8px 18px 0; }
 .app-content-controls { display: block; width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; }
 .content { width: min(100%, 900px); margin: 0 auto; }
 .connection-banner { position: fixed; z-index: 200; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px max(16px, calc((100vw - 860px) / 2)); border-bottom: 1px solid var(--danger-line); background: var(--danger-surface); color: var(--danger); font-weight: 700; box-shadow: var(--shadow); }

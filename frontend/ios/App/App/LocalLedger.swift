@@ -23,23 +23,98 @@ struct LocalLedger {
         }
     }
 
-    func importBackup(from source: URL) throws {
-        guard try state() != .imported else { throw Failure.existingLedger }
+    private static let backupLimit = 100 * 1024 * 1024
+
+    private var recoveryURL: URL {
+        databaseURL.deletingLastPathComponent().appendingPathComponent("irostam-before-restore.sqlite3")
+    }
+
+    var hasRecoveryBackup: Bool {
+        FileManager.default.fileExists(atPath: recoveryURL.path)
+    }
+
+    func importBackup(from source: URL, replacing: Bool = false) throws {
+        if !replacing, try state() == .imported { throw Failure.existingLedger }
         let files = FileManager.default
         let metadata = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-        guard metadata.isRegularFile == true, metadata.isSymbolicLink != true, let size = metadata.fileSize, size <= 100 * 1024 * 1024 else {
+        guard metadata.isRegularFile == true, metadata.isSymbolicLink != true,
+              let size = metadata.fileSize, size <= Self.backupLimit else {
             throw Failure.fileSize
         }
         let directory = databaseURL.deletingLastPathComponent()
         try files.createDirectory(at: directory, withIntermediateDirectories: true)
         let staged = directory.appendingPathComponent("import-\(UUID().uuidString).sqlite3")
-        defer {
-            for suffix in ["", "-wal", "-shm", "-journal"] {
-                try? files.removeItem(atPath: staged.path + suffix)
+        defer { Self.removeSnapshot(staged) }
+        try files.copyItem(at: source, to: staged)
+        try validateSnapshot(staged)
+
+        if replacing && files.fileExists(atPath: databaseURL.path) {
+            let prior = directory.appendingPathComponent("recovery-\(UUID().uuidString).sqlite3")
+            defer { Self.removeSnapshot(prior) }
+            try snapshot(to: prior)
+            // The serialized storage queue keeps the live database closed across the replacement.
+            try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READWRITE) { db in
+                guard try Self.values(db, "PRAGMA journal_mode = DELETE") == ["delete"] else {
+                    throw Failure.database
+                }
+            }
+            guard rename(prior.path, recoveryURL.path) == 0 else { throw Failure.database }
+        }
+        guard rename(staged.path, databaseURL.path) == 0 else { throw Failure.database }
+    }
+
+    func restoreRecoveryBackup() throws {
+        guard hasRecoveryBackup else { throw Failure.database }
+        try importBackup(from: recoveryURL, replacing: true)
+    }
+
+    func exportBackup() throws -> URL {
+        guard try state() == .imported else { throw Failure.database }
+        let id = UUID().uuidString
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("irostam-export-\(id)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let stamp = Self.dateFormatter("yyyyMMdd'T'HHmmss", zone: .current).string(from: Date())
+        let destination = directory.appendingPathComponent("iRostam-\(stamp)-\(id.prefix(8)).sqlite3")
+        do {
+            try snapshot(to: destination)
+            let size = try destination.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard (1...Self.backupLimit).contains(size) else { throw Failure.fileSize }
+            try validateSnapshot(destination)
+            return destination
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
+    }
+
+    private func snapshot(to destination: URL) throws {
+        try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READONLY) { source in
+            try withDatabase(at: destination, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) { target in
+                guard let copy = sqlite3_backup_init(target, "main", source, "main") else {
+                    throw Failure.database
+                }
+                let copied = sqlite3_backup_step(copy, -1)
+                let finished = sqlite3_backup_finish(copy)
+                guard copied == SQLITE_DONE, finished == SQLITE_OK,
+                      try Self.values(target, "PRAGMA journal_mode = DELETE") == ["delete"] else {
+                    throw Failure.database
+                }
             }
         }
-        try files.copyItem(at: source, to: staged)
+    }
 
+    private static func removeSnapshot(_ url: URL) {
+        for suffix in ["", "-wal", "-shm", "-journal"] {
+            try? FileManager.default.removeItem(atPath: url.path + suffix)
+        }
+    }
+
+    private static let nativeColumns = [
+        "workouts": Set(["native_zone", "native_day"]),
+        "exercise_sets": Set(["native_zone"])
+    ]
+
+    private func validateSnapshot(_ staged: URL) throws {
         try withDatabase(at: staged, flags: SQLITE_OPEN_READWRITE) { database in
             guard try Self.values(database, Self.tables) == Self.columns.keys.sorted(),
                   try Self.values(database, "SELECT name FROM sqlite_schema WHERE type IN ('trigger', 'view') OR (type = 'table' AND sql LIKE 'CREATE VIRTUAL TABLE%')").isEmpty,
@@ -48,8 +123,9 @@ struct LocalLedger {
                 throw Failure.unsupported
             }
             for (table, columns) in Self.columns {
-                let actual = try Self.values(database, "SELECT name FROM pragma_table_info('\(table)')")
-                guard Set(actual) == Set(columns.split(separator: " ").map(String.init)) else {
+                let actual = Set(try Self.values(database, "SELECT name FROM pragma_table_info('\(table)')"))
+                let original = Set(columns.split(separator: " ").map(String.init))
+                guard actual == original || actual == original.union(Self.nativeColumns[table] ?? []) else {
                     throw Failure.unsupported
                 }
             }
@@ -59,7 +135,6 @@ struct LocalLedger {
                 throw Failure.database
             }
         }
-        guard rename(staged.path, databaseURL.path) == 0 else { throw Failure.database }
     }
 
     func importedCounts() throws -> (workouts: Int, sets: Int, photos: Int) {
@@ -158,7 +233,7 @@ struct LocalLedger {
         var errorDescription: String? {
             switch self {
             case .database: return "The database could not be read or failed an integrity check."
-            case .unsupported: return "Choose a Rostam format 1, schema 17 backup downloaded from Rostam Settings."
+            case .unsupported: return "Choose a supported Rostam or iRostam SQLite backup."
             case .fileSize: return "Choose a backup file up to 100 MiB."
             case .existingLedger: return "A backup is already imported. Your local database was kept."
             }

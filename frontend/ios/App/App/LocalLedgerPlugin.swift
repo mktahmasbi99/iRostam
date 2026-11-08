@@ -17,11 +17,14 @@ class LocalLedgerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
         CAPPluginMethod(name: "startup", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "changeWorkout", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "history", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "importBackup", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "importBackup", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "exportBackup", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "restoreRecovery", returnType: CAPPluginReturnPromise)
     ]
 
     private let storage = DispatchQueue(label: "iRostam.storage")
     private var pickerCall: CAPPluginCall?
+    private var exportURL: URL?
 
     private func ledger() throws -> LocalLedger {
         let directory = try FileManager.default.url(
@@ -55,6 +58,7 @@ class LocalLedgerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
                     result["workouts"] = counts.workouts
                     result["sets"] = counts.sets
                     result["photos"] = counts.photos
+                    result["hasRecoveryBackup"] = ledger.hasRecoveryBackup
                 }
                 call.resolve(result)
             } catch {
@@ -107,18 +111,73 @@ class LocalLedgerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
         }
     }
 
+    @objc func exportBackup(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard self.pickerCall == nil, let presenter = self.bridge?.viewController else {
+                call.reject("Could not open Files.")
+                return
+            }
+            self.pickerCall = call
+            self.storage.async {
+                do {
+                    let url = try self.ledger().exportBackup()
+                    DispatchQueue.main.async {
+                        self.exportURL = url
+                        let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
+                        picker.delegate = self
+                        presenter.present(picker, animated: true)
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.pickerCall = nil
+                        call.reject((error as? LocalLedger.Failure)?.localizedDescription ?? "Could not create the backup.")
+                    }
+                }
+            }
+        }
+    }
+
+    @objc func restoreRecovery(_ call: CAPPluginCall) {
+        storage.async {
+            do {
+                try self.ledger().restoreRecoveryBackup()
+                call.resolve(["imported": true])
+            } catch {
+                call.reject((error as? LocalLedger.Failure)?.localizedDescription ?? "Could not restore the previous ledger.")
+            }
+        }
+    }
+
+    private func completeExport(_ call: CAPPluginCall, saved: Bool) {
+        if let exportURL {
+            try? FileManager.default.removeItem(at: exportURL.deletingLastPathComponent())
+            self.exportURL = nil
+        }
+        call.resolve(["saved": saved])
+    }
+
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-        pickerCall?.resolve(["imported": false])
+        guard let call = pickerCall else { return }
         pickerCall = nil
+        if exportURL != nil {
+            completeExport(call, saved: false)
+        } else {
+            call.resolve(["imported": false])
+        }
     }
 
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let call = pickerCall else { return }
         pickerCall = nil
+        if exportURL != nil {
+            completeExport(call, saved: !urls.isEmpty)
+            return
+        }
         guard let source = urls.first else {
             call.resolve(["imported": false])
             return
         }
+        let replacing = call.getBool("replacing") == true
         storage.async {
             let access = source.startAccessingSecurityScopedResource()
             defer { if access { source.stopAccessingSecurityScopedResource() } }
@@ -127,7 +186,7 @@ class LocalLedgerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
                 var coordinationError: NSError?
                 var outcome: Result<Void, Error>?
                 NSFileCoordinator().coordinate(readingItemAt: source, options: [], error: &coordinationError) { url in
-                    outcome = Result { try ledger.importBackup(from: url) }
+                    outcome = Result { try ledger.importBackup(from: url, replacing: replacing) }
                 }
                 if let coordinationError { throw coordinationError }
                 guard let outcome else { throw LocalLedger.Failure.database }
