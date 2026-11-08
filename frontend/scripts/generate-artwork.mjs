@@ -36,3 +36,9 @@ for (const [name, size] of [["icon-192", 192], ["icon-512", 512], ["apple-touch-
       .toFile(`public/icons/${name}.webp`);
   }
 }
+
+await sharp("artwork/rostam-logo.png")
+  .resize(1024, 1024)
+  .flatten({ background: "#eee4d2" })
+  .png()
+  .toFile("ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png");

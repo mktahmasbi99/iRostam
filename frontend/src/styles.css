@@ -433,6 +433,8 @@ fieldset.dialog-content-controls { display: contents; min-width: 0; margin: 0; p
 .appearance-settings p { margin: 0; }
 .appearance-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .appearance-options button { min-height: 44px; }
+.native-backup-actions { display: grid; gap: 10px; }
+.native-backup-actions button { width: 100%; }
 .schedule-save-button:disabled { opacity: .48; }
 .safety-backups-toggle { margin-top: 12px; }
 .schedule-save-button { margin-top: 10px; }

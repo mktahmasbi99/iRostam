@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Backdrop, Logo } from "../App";
 import { nativeLedger, type NativeStartupState } from "../lib/nativeLedger";
+import { applyThemePreference, readThemePreference, saveThemePreference, systemThemeQuery, type ThemePreference } from "../lib/theme";
 import { NativeHistory } from "./NativeHistory";
 import { Modal } from "./Modal";
 
@@ -15,6 +16,21 @@ export function NativeStartup() {
   const [backupError, setBackupError] = useState("");
   const [backupNotice, setBackupNotice] = useState("");
   const [confirmRestore, setConfirmRestore] = useState<"restore" | "recovery" | null>(null);
+  const [themePreference, setThemePreference] = useState<ThemePreference>(readThemePreference);
+  useEffect(() => {
+    const systemTheme = systemThemeQuery();
+    const apply = () => applyThemePreference(themePreference);
+    apply();
+    if (themePreference !== "system") return;
+    systemTheme.addEventListener("change", apply);
+    return () => systemTheme.removeEventListener("change", apply);
+  }, [themePreference]);
+
+  const changeThemePreference = (preference: ThemePreference) => {
+    saveThemePreference(preference);
+    setThemePreference(preference);
+  };
+
   useEffect(() => {
     let active = true;
     let busy = false;
@@ -78,18 +94,23 @@ export function NativeStartup() {
       <header className="section-title"><h1>Settings</h1><p>Backups and local storage</p></header>
       <p>{result.workouts} workouts · {result.sets} sets · {result.photos} progress photos</p>
       <div className="stack">
+        <section className="settings-card appearance-settings"><div><h2>Appearance</h2><p>Choose how iRostam looks.</p></div><div className="segmented appearance-options" role="group" aria-label="Theme">
+          {(["system", "light", "dark"] as const).map((preference) => <button key={preference} type="button" className={themePreference === preference ? "selected" : ""} aria-pressed={themePreference === preference} onClick={() => changeThemePreference(preference)}>{preference[0].toUpperCase() + preference.slice(1)}</button>)}
+        </div></section>
         <section className="settings-card"><h2>Backups and local storage</h2>
-          <button className="primary" disabled={backupAction !== null} onClick={() => void runBackupAction("export")}>Back Up Now</button>
-          <button className="secondary" disabled={backupAction !== null} onClick={() => setConfirmRestore("restore")}>Restore from Files</button>
-          {result.hasRecoveryBackup && <button className="secondary" disabled={backupAction !== null} onClick={() => setConfirmRestore("recovery")}>Restore Previous Ledger</button>}
+          <div className="native-backup-actions">
+            <button className="primary" disabled={backupAction !== null} onClick={() => void runBackupAction("export")}>Back Up Now</button>
+            <button className="secondary" disabled={backupAction !== null} onClick={() => setConfirmRestore("restore")}>Restore from Files</button>
+            {result.hasRecoveryBackup && <button className="secondary" disabled={backupAction !== null} onClick={() => setConfirmRestore("recovery")}>Restore Previous Ledger</button>}
+          </div>
           {backupAction && <p role="status">{backupAction === "export" ? "Preparing backup for Files…" : "Reading backup…"}</p>}
           {backupNotice && <p role="status">{backupNotice}</p>}
           {backupError && <p className="error" role="alert">{backupError}</p>}
         </section>
       </div>
     </main>} />
-      {confirmRestore && <Modal title="Replace the local ledger?" onClose={() => setConfirmRestore(null)}>
-        <p>{confirmRestore === "recovery" ? "Restore the most recent recovery copy."
+      {confirmRestore && <Modal title={confirmRestore === "recovery" ? "Restore the previous ledger?" : "Replace the local ledger?"} onClose={() => setConfirmRestore(null)}>
+        <p>{confirmRestore === "recovery" ? "Restore the ledger saved before your last restore. The current ledger will be kept as a new recovery copy."
           : "Choose a backup in Files to replace the current ledger."} iRostam will keep a recovery copy of the current ledger.</p>
         <div className="draft-actions">
           <button onClick={() => setConfirmRestore(null)}>Cancel</button>
@@ -110,8 +131,8 @@ export function NativeStartup() {
       {backupError && <p className="error" role="alert">{backupError}</p>}
       {backupAction && <p role="status">{backupAction === "create" ? "Preparing your fresh ledger…" : "Reading backup…"}</p>}
       <div className="setup-actions">
-        <button disabled={backupAction !== null} onClick={() => { setBackupError(""); setBackupAction("create"); setRequest({ create: true }); }}>Start fresh</button>
-        <button className="primary" disabled={backupAction !== null} onClick={() => void runBackupAction("import")}>Restore backup</button>
+        <button className="primary" disabled={backupAction !== null} onClick={() => { setBackupError(""); setBackupAction("create"); setRequest({ create: true }); }}>Start fresh</button>
+        <button className="secondary" disabled={backupAction !== null} onClick={() => void runBackupAction("import")}>Restore backup</button>
       </div>
     </main></>;
   }
@@ -127,8 +148,8 @@ export function NativeStartup() {
           <button onClick={() => load(false)}>Retry</button>
         </> : null}
     </main>
-    {confirmRestore && <Modal title="Replace the local ledger?" onClose={() => setConfirmRestore(null)}>
-      <p>{confirmRestore === "recovery" ? "Restore the most recent recovery copy."
+    {confirmRestore && <Modal title={confirmRestore === "recovery" ? "Restore the previous ledger?" : "Replace the local ledger?"} onClose={() => setConfirmRestore(null)}>
+      <p>{confirmRestore === "recovery" ? "Restore the ledger saved before your last restore. The current ledger will be kept as a new recovery copy."
         : "Choose a backup in Files to replace the current ledger."} iRostam will keep a recovery copy of the current ledger.</p>
       <div className="draft-actions">
         <button onClick={() => setConfirmRestore(null)}>Cancel</button>
