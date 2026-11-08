@@ -6,7 +6,6 @@ import type { Exercise } from "../lib/types";
 
 interface Props {
   exercise: Exercise;
-  readOnly?: boolean;
 }
 
 function trailingPunctuation(value: string): [string, string] {
@@ -41,7 +40,7 @@ export function ExerciseNoteText({ body }: { body: string }) {
   return <p className="exercise-note-body">{parts}</p>;
 }
 
-export function ExerciseNote({ exercise, readOnly = false }: Props) {
+export function ExerciseNote({ exercise }: Props) {
   const [body, setBody] = useState(exercise.exerciseNote ?? "");
   const [draft, setDraft] = useState(body);
   const [editing, setEditing] = useState(false);
@@ -72,8 +71,6 @@ export function ExerciseNote({ exercise, readOnly = false }: Props) {
       setSaving(false);
     }
   }
-
-  if (readOnly) return body ? <ExerciseNoteText body={body} /> : null;
 
   if (editing) {
     return <form className="exercise-note-editor" data-update-dirty="exercise-note" data-update-dirty-label="Exercise note" onSubmit={(event) => { event.preventDefault(); void save(); }}>

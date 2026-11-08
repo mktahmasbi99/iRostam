@@ -49,18 +49,22 @@ struct LocalLedger {
         try validateSnapshot(staged)
 
         if replacing && files.fileExists(atPath: databaseURL.path) {
-            let prior = directory.appendingPathComponent("recovery-\(UUID().uuidString).sqlite3")
-            defer { Self.removeSnapshot(prior) }
-            try snapshot(to: prior)
+            try keepRecoveryBackup()
             // The serialized storage queue keeps the live database closed across the replacement.
             try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READWRITE) { db in
                 guard try Self.values(db, "PRAGMA journal_mode = DELETE") == ["delete"] else {
                     throw Failure.database
                 }
             }
-            guard rename(prior.path, recoveryURL.path) == 0 else { throw Failure.database }
         }
         guard rename(staged.path, databaseURL.path) == 0 else { throw Failure.database }
+    }
+
+    func keepRecoveryBackup() throws {
+        let prior = recoveryURL.deletingLastPathComponent().appendingPathComponent("recovery-\(UUID().uuidString).sqlite3")
+        defer { Self.removeSnapshot(prior) }
+        try snapshot(to: prior)
+        guard rename(prior.path, recoveryURL.path) == 0 else { throw Failure.database }
     }
 
     func restoreRecoveryBackup() throws {

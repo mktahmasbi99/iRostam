@@ -104,7 +104,7 @@ export function NativeStartup() {
       {backupError && <p className="error" role="alert">{backupError}</p>}
     </main>
     {confirmRestore && <Modal title="Replace the local ledger?" onClose={() => setConfirmRestore(null)}>
-      <p>{confirmRestore === "recovery" ? "Restore the ledger saved before the last replacement."
+      <p>{confirmRestore === "recovery" ? "Restore the most recent recovery copy."
         : "Choose a backup in Files to replace the current ledger."} iRostam will keep a recovery copy of the current ledger.</p>
       <div className="draft-actions">
         <button onClick={() => setConfirmRestore(null)}>Cancel</button>

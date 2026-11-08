@@ -14,7 +14,7 @@ async function request<T>(path: string, init?: RequestInit, options: { clearDraf
     }
     if (path === "/api/config") {
       const { today, timezone } = await nativeLedger.startup({ create: false });
-      return { today, timezone, version: "0.5.0" } as T;
+      return { today, timezone, version: "0.6.0" } as T;
     }
     if (path.startsWith("/api/exercises?")) {
       return (await nativeLedger.history<{ items: T }>({ path })).items;
@@ -140,7 +140,20 @@ export const api = {
     request<Exercise>("/api/exercises", json("POST", payload)),
   updateExercise: (id: number, payload: ExerciseUpdatePayload) =>
     request<Exercise>(`/api/exercises/${id}`, json("PATCH", payload)),
-  uploadExerciseImage: (file: File) => {
+  uploadExerciseImage: async (file: File) => {
+    if (Capacitor.isNativePlatform()) {
+      const image = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const data = String(reader.result).split(",")[1];
+          if (data) resolve(data);
+          else reject(new Error("Could not read the exercise picture."));
+        };
+        reader.onerror = () => reject(new Error("Could not read the exercise picture."));
+        reader.readAsDataURL(file);
+      });
+      return request<{ imageKey: string }>("/api/exercise-images", json("POST", { image }), { clearDraftOnSuccess: false });
+    }
     const form = new FormData();
     form.append("file", file);
     return request<{ imageKey: string }>("/api/exercise-images", { method: "POST", body: form }, { clearDraftOnSuccess: false });

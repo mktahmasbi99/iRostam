@@ -61,14 +61,21 @@ extension LocalLedger {
                 return ["month": month, "activeDates": active.filter { $0 <= today }.sorted()]
             }
             if route == ["api", "exercises"] {
+                let status = query.first { $0.name == "status" }?.value ?? "active"
                 let filter = query.first { $0.name == "measurementType" }?.value ?? ""
                 let term = query.first { $0.name == "query" }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 let exercises = try Self.rows(db, Self.exerciseFields + """
-                    WHERE e.archived_at IS NULL AND (? = '' OR e.measurement_type = ?) ORDER BY e.name COLLATE NOCASE
-                    """, [filter, filter])
-                return ["items": exercises.filter {
+                    WHERE (? = 'all' OR (? = 'active' AND e.archived_at IS NULL) OR (? = 'archived' AND e.archived_at IS NOT NULL))
+                    AND (? = '' OR e.measurement_type = ?) ORDER BY e.name COLLATE NOCASE
+                    """, [status, status, status, filter, filter])
+                return ["items": try exercises.filter {
                     term.isEmpty || ($0["name"] as? String)?.localizedStandardContains(term) == true
-                }]
+                }.map { try Self.exerciseDetails(db, $0) }]
+            }
+            if route.count == 3, route.prefix(2) == ["api", "exercise-images"] {
+                guard let row = try Self.rows(db, "SELECT jpeg FROM exercise_images WHERE image_key = ?", [route[2]]).first,
+                      let data = row["jpeg"] as? Data else { throw Failure.database }
+                return ["image": data.base64EncodedString()]
             }
             if route.count == 4, route.prefix(2) == ["api", "exercises"],
                route[3] == "prefill", let id = Int(route[2]) {
@@ -142,7 +149,7 @@ extension LocalLedger {
 
         """
 
-    private static let exerciseFields = """
+    static let exerciseFields = """
         SELECT e.id, e.name, e.base_name AS baseName, e.measurement_type AS measurementType,
             e.equipment, e.custom_equipment AS customEquipment, e.allow_bodyweight AS allowBodyweight,
             e.image_key AS imageKey, e.exercise_note AS exerciseNote, e.archived_at AS archivedAt,
@@ -224,6 +231,11 @@ extension LocalLedger {
             let result: Int32
             if let number = value as? Int {
                 result = sqlite3_bind_int64(statement, position, Int64(number))
+            } else if let data = value as? Data {
+                result = data.withUnsafeBytes {
+                    sqlite3_bind_blob(statement, position, $0.baseAddress, Int32($0.count),
+                                      unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+                }
             } else if value is NSNull {
                 result = sqlite3_bind_null(statement, position)
             } else if let text = value as? String {
@@ -245,6 +257,10 @@ extension LocalLedger {
                     case SQLITE_INTEGER:
                         let number = Int(sqlite3_column_int64(statement, column))
                         row[name] = ["allowBodyweight", "hasHistory"].contains(name) ? (number != 0) as Any : number
+                    case SQLITE_BLOB:
+                        if let bytes = sqlite3_column_blob(statement, column) {
+                            row[name] = Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, column)))
+                        }
                     case SQLITE_TEXT:
                         if let text = sqlite3_column_text(statement, column) { row[name] = String(cString: text) }
                     default: row[name] = NSNull()

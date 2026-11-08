@@ -19,7 +19,7 @@ extension LocalLedger {
         }
     }
 
-    private func write<T>(_ action: (OpaquePointer) throws -> T) throws -> T {
+    func write<T>(_ action: (OpaquePointer) throws -> T) throws -> T {
         try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READWRITE) { db in
             _ = try Self.rows(db, "BEGIN IMMEDIATE")
             do {
@@ -64,6 +64,12 @@ extension LocalLedger {
 
     func changeWorkout(_ path: String, method: String, payload: Row) throws -> Row {
         let route = path.split(separator: "/").map(String.init)
+        if route.prefix(2) == ["api", "exercises"] {
+            return try changeExercise(route, method: method, payload: payload)
+        }
+        if route == ["api", "exercise-images"], method == "POST", let encoded = payload["image"] as? String {
+            return try storeExerciseImage(encoded)
+        }
         let zone = TimeZone.current
         return try write { db in
             if route == ["api", "workouts"], method == "POST" {

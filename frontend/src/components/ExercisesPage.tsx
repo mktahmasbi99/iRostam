@@ -82,7 +82,8 @@ export function ExercisesPage() {
     return <div className="exercise-actions-menu" ref={isOpen ? menuRef : null}>
       <button className="icon-button" aria-label={`More actions for ${exercise.name}`} aria-haspopup="menu" aria-expanded={isOpen} onClick={() => setOpenMenuId(isOpen ? null : exercise.id)}><MoreVertical /></button>
       {isOpen && <div className="exercise-actions-popover" role="menu">
-        {archivedExercise ? <button className="icon-button" aria-label={`Restore ${exercise.name}`} title="Restore" role="menuitem" onClick={async () => { await api.restoreExercise(exercise.id); setOpenMenuId(null); await load(); }}><RotateCcw /></button> : <button className="icon-button" aria-label={`Archive ${exercise.name}`} title="Archive" role="menuitem" onClick={() => { setOpenMenuId(null); void archiveExercise(exercise); }}><Archive /></button>}
+        {archivedExercise ? <button className="icon-button" aria-label={`Restore ${exercise.name}`} title="Restore" role="menuitem" onClick={async () => { setOpenMenuId(null); try { await api.restoreExercise(exercise.id); await load(); }
+            catch (caught) { setError(caught instanceof Error ? caught.message : "Could not restore exercise."); } }}><RotateCcw /></button> : <button className="icon-button" aria-label={`Archive ${exercise.name}`} title="Archive" role="menuitem" onClick={() => { setOpenMenuId(null); void archiveExercise(exercise); }}><Archive /></button>}
         <button className="icon-button danger" aria-label={`Delete ${exercise.name} permanently`} title="Delete permanently" role="menuitem" onClick={() => void remove(exercise)}><Trash2 /></button>
       </div>}
     </div>;
