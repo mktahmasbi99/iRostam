@@ -1,15 +1,53 @@
 import UIKit
 import Capacitor
+import UserNotifications
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        #if DEBUG
+        UNUserNotificationCenter.current().delegate = self
+        scheduleSigningReminder()
+        #endif
         return true
     }
+
+    #if DEBUG
+    private func scheduleSigningReminder() {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let profile = try? Data(contentsOf: url) else { return }
+
+        // shortcut: reads the profile's legacy XML payload, revisit if Xcode stops embedding it.
+        guard let start = profile.range(of: Data("<?xml".utf8)),
+              let end = profile.range(of: Data("</plist>".utf8), in: start.upperBound..<profile.endIndex),
+              let plist = try? PropertyListSerialization.propertyList(
+                from: profile[start.lowerBound..<end.upperBound], options: [], format: nil
+              ) as? [String: Any],
+              let expiry = plist["ExpirationDate"] as? Date,
+              expiry.timeIntervalSinceNow > 0 else { return }
+
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "iRostam signing expires soon"
+            content.body = "Connect your iPhone to your Mac and run iRostam from Xcode before \(expiry.formatted(date: .abbreviated, time: .shortened))."
+            content.sound = .default
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: max(1, expiry.timeIntervalSinceNow - 24 * 60 * 60), repeats: false
+            )
+            center.add(UNNotificationRequest(identifier: "signing-expiry", content: content, trigger: trigger))
+        }
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .list, .sound])
+    }
+    #endif
 
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
