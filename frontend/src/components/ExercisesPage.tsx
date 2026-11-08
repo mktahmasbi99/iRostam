@@ -27,6 +27,10 @@ export function ExercisesPage() {
   const [loaded, setLoaded] = useState(false);
   const [readRetry, setReadRetry] = useState(0);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ exercise: Exercise; action: "delete" | "restore" } | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionSaving, setActionSaving] = useState(false);
   const exerciseSearchController = useRef<AbortController | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const closeMenu = useCallback(() => setOpenMenuId(null), []);
@@ -67,14 +71,33 @@ export function ExercisesPage() {
     }
   }
 
-  async function remove(exercise: Exercise) {
-    const confirmation = window.prompt(
-      `Permanently delete ${exercise.name}? This will delete all workout history for this exercise.\n\nArchiving is safer and keeps its history.\n\nType DELETE to continue.`,
-    );
-    if (confirmation === null) return;
-    try { await api.deleteExercise(exercise.id, confirmation); setEditing(null); setViewing(null); await load(); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Could not delete exercise."); }
-    finally { setOpenMenuId(null); }
+  async function confirmExerciseAction() {
+    if (!pendingAction || (pendingAction.action === "delete" && deleteConfirmation !== "DELETE")) return;
+    setActionSaving(true);
+    setActionError("");
+    try {
+      if (pendingAction.action === "delete") {
+        await api.deleteExercise(pendingAction.exercise.id, deleteConfirmation);
+        setEditing(null);
+        setViewing(null);
+      } else {
+        await api.restoreExercise(pendingAction.exercise.id);
+      }
+      setPendingAction(null);
+      setDeleteConfirmation("");
+      await load();
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : `Could not ${pendingAction.action} exercise.`);
+    } finally {
+      setActionSaving(false);
+    }
+  }
+
+  function openExerciseAction(exercise: Exercise, action: "delete" | "restore") {
+    setOpenMenuId(null);
+    setActionError("");
+    setDeleteConfirmation("");
+    setPendingAction({ exercise, action });
   }
 
   function actionsMenu(exercise: Exercise, archivedExercise = false) {
@@ -82,9 +105,8 @@ export function ExercisesPage() {
     return <div className="exercise-actions-menu" ref={isOpen ? menuRef : null}>
       <button className="icon-button" aria-label={`More actions for ${exercise.name}`} aria-haspopup="menu" aria-expanded={isOpen} onClick={() => setOpenMenuId(isOpen ? null : exercise.id)}><MoreVertical /></button>
       {isOpen && <div className="exercise-actions-popover" role="menu">
-        {archivedExercise ? <button className="icon-button" aria-label={`Restore ${exercise.name}`} title="Restore" role="menuitem" onClick={async () => { setOpenMenuId(null); try { await api.restoreExercise(exercise.id); await load(); }
-            catch (caught) { setError(caught instanceof Error ? caught.message : "Could not restore exercise."); } }}><RotateCcw /></button> : <button className="icon-button" aria-label={`Archive ${exercise.name}`} title="Archive" role="menuitem" onClick={() => { setOpenMenuId(null); void archiveExercise(exercise); }}><Archive /></button>}
-        <button className="icon-button danger" aria-label={`Delete ${exercise.name} permanently`} title="Delete permanently" role="menuitem" onClick={() => void remove(exercise)}><Trash2 /></button>
+        {archivedExercise ? <button className="icon-button" aria-label={`Restore ${exercise.name}`} title="Restore" role="menuitem" onClick={() => openExerciseAction(exercise, "restore")}><RotateCcw /></button> : <button className="icon-button" aria-label={`Archive ${exercise.name}`} title="Archive" role="menuitem" onClick={() => { setOpenMenuId(null); void archiveExercise(exercise); }}><Archive /></button>}
+        <button className="icon-button danger" aria-label={`Delete ${exercise.name} permanently`} title="Delete permanently" role="menuitem" onClick={() => openExerciseAction(exercise, "delete")}><Trash2 /></button>
       </div>}
     </div>;
   }
@@ -123,5 +145,12 @@ export function ExercisesPage() {
     </Modal>}
     {editing && <Modal title={`Edit ${editing.name}`} titleHidden closePositionLeft onClose={() => setEditing(null)} wide headerAction={<div className="exercise-edit-header-actions">{actionsMenu(editing)}<button className="rotation-save-button" type="submit" form="exercise-editor-form" aria-label="Save exercise" title="Save exercise"><Check /></button></div>}><ExerciseEditor exercise={editing} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); void load(); }} /></Modal>}
     {creating && <Modal title="New exercise" onClose={() => setCreating(false)} wide><ExerciseEditor onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); void load(); }} /></Modal>}
+    {pendingAction && <Modal title={pendingAction.action === "delete" ? `Delete ${pendingAction.exercise.name}?` : `Restore ${pendingAction.exercise.name}?`} onClose={() => { if (!actionSaving) { setPendingAction(null); setDeleteConfirmation(""); } }}>
+      <div className="stack">
+        {pendingAction.action === "delete" ? <><p>This permanently deletes <strong>{pendingAction.exercise.name}</strong> and all its workout history. Archiving keeps the history.</p><p>Type <strong>DELETE</strong> to confirm.</p><label>Confirmation<input autoFocus value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} disabled={actionSaving} /></label></> : <p>Restore <strong>{pendingAction.exercise.name}</strong>? It will be available in your exercise library again.</p>}
+        {actionError && <p className="error" role="alert">{actionError}</p>}
+        <div className="form-actions"><button className="secondary" disabled={actionSaving} onClick={() => { setPendingAction(null); setDeleteConfirmation(""); }}>{pendingAction.action === "delete" ? "Cancel" : "No, keep archived"}</button><button className={pendingAction.action === "delete" ? "danger-button" : "primary"} disabled={actionSaving || (pendingAction.action === "delete" && deleteConfirmation !== "DELETE")} onClick={() => void confirmExerciseAction()}>{actionSaving ? `${pendingAction.action === "delete" ? "Deleting" : "Restoring"}…` : pendingAction.action === "delete" ? "Delete permanently" : "Yes, restore"}</button></div>
+      </div>
+    </Modal>}
   </main>;
 }
