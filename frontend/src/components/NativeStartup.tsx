@@ -4,18 +4,17 @@ import { nativeLedger, type NativeStartupState } from "../lib/nativeLedger";
 import { NativeHistory } from "./NativeHistory";
 import { Modal } from "./Modal";
 
-type BackupAction = "import" | "export" | "restore" | "recovery";
+type BackupAction = "import" | "export" | "restore" | "recovery" | "create";
 
 export function NativeStartup() {
   const [request, setRequest] = useState({ create: false });
   const [result, setResult] = useState<NativeStartupState | string | null>(null);
+  const [setupRequired, setSetupRequired] = useState(false);
 
   const [backupAction, setBackupAction] = useState<BackupAction | null>(null);
   const [backupError, setBackupError] = useState("");
   const [backupNotice, setBackupNotice] = useState("");
   const [confirmRestore, setConfirmRestore] = useState<"restore" | "recovery" | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
-
   useEffect(() => {
     let active = true;
     let busy = false;
@@ -24,10 +23,14 @@ export function NativeStartup() {
       busy = true;
       try {
         const startup = await nativeLedger.startup({ create });
-        if (active) setResult(startup);
+        if (active) {
+          setResult(startup);
+          setSetupRequired(startup.state !== "imported");
+        }
       } catch {
         if (active) setResult("Could not open the local iRostam database.");
       } finally {
+        if (create && active) setBackupAction(null);
         busy = false;
       }
     };
@@ -70,8 +73,47 @@ export function NativeStartup() {
     }
   };
 
-  if (historyOpen && result && typeof result !== "string") {
-    return <><Backdrop /><NativeHistory today={result.today} timezone={result.timezone} onClose={() => { setHistoryOpen(false); load(false); }} /></>;
+  if (result && typeof result !== "string" && result.state === "imported") {
+    return <><Backdrop /><NativeHistory today={result.today} timezone={result.timezone} settingsContent={<main className="page">
+      <header className="section-title"><h1>Settings</h1><p>Backups and local storage</p></header>
+      <p>{result.workouts} workouts · {result.sets} sets · {result.photos} progress photos</p>
+      <div className="stack">
+        <section className="settings-card"><h2>Backups and local storage</h2>
+          <button className="primary" disabled={backupAction !== null} onClick={() => void runBackupAction("export")}>Back Up Now</button>
+          <button className="secondary" disabled={backupAction !== null} onClick={() => setConfirmRestore("restore")}>Restore from Files</button>
+          {result.hasRecoveryBackup && <button className="secondary" disabled={backupAction !== null} onClick={() => setConfirmRestore("recovery")}>Restore Previous Ledger</button>}
+          {backupAction && <p role="status">{backupAction === "export" ? "Preparing backup for Files…" : "Reading backup…"}</p>}
+          {backupNotice && <p role="status">{backupNotice}</p>}
+          {backupError && <p className="error" role="alert">{backupError}</p>}
+        </section>
+      </div>
+    </main>} />
+      {confirmRestore && <Modal title="Replace the local ledger?" onClose={() => setConfirmRestore(null)}>
+        <p>{confirmRestore === "recovery" ? "Restore the most recent recovery copy."
+          : "Choose a backup in Files to replace the current ledger."} iRostam will keep a recovery copy of the current ledger.</p>
+        <div className="draft-actions">
+          <button onClick={() => setConfirmRestore(null)}>Cancel</button>
+          <button className="primary" onClick={() => void runBackupAction(confirmRestore)}>
+            {confirmRestore === "recovery" ? "Restore Previous Ledger" : "Choose Backup"}
+          </button>
+        </div>
+      </Modal>}
+    </>;
+  }
+
+  if (setupRequired) {
+    return <><Backdrop /><main className="startup setup-startup">
+      <Logo className="app-logo startup-logo" sizes="112px" />
+      <h1>Welcome to iRostam</h1>
+      <p className="setup-copy">Start with a fresh ledger and the standard exercises, or restore an existing Rostam backup.</p>
+      {typeof result === "string" && <p className="error" role="alert">{result}</p>}
+      {backupError && <p className="error" role="alert">{backupError}</p>}
+      {backupAction && <p role="status">{backupAction === "create" ? "Preparing your fresh ledger…" : "Reading backup…"}</p>}
+      <div className="setup-actions">
+        <button disabled={backupAction !== null} onClick={() => { setBackupError(""); setBackupAction("create"); setRequest({ create: true }); }}>Start fresh</button>
+        <button className="primary" disabled={backupAction !== null} onClick={() => void runBackupAction("import")}>Restore backup</button>
+      </div>
+    </main></>;
   }
 
   return <>
@@ -79,29 +121,11 @@ export function NativeStartup() {
     <main className="startup">
       <Logo className="app-logo startup-logo" sizes="112px" />
       <h1>iRostam</h1>
-      {result === null ? <p role="status">Checking local storage…</p> :
+      {result === null ? <p role="status">Opening Today…</p> :
         typeof result === "string" ? <>
           <p className="error" role="alert">{result}</p>
           <button onClick={() => load(false)}>Retry</button>
-        </> : <>
-          <p>{result.state === "imported" ? "Rostam backup imported." : result.state === "empty" ? "Local database ready." : "Set up local storage for iRostam."}</p>
-          <p>{result.today} · {result.timezone}</p>
-          {result.state === "imported" ? <>
-            <p>{result.workouts} workouts · {result.sets} sets · {result.photos} progress photos</p>
-            <button disabled={backupAction !== null} onClick={() => setHistoryOpen(true)}>Open workout history</button>
-            <button disabled={backupAction !== null} onClick={() => void runBackupAction("export")}>Back Up Now</button>
-            <button disabled={backupAction !== null} onClick={() => setConfirmRestore("restore")}>Restore from Files</button>
-            {result.hasRecoveryBackup && <button disabled={backupAction !== null}
-              onClick={() => setConfirmRestore("recovery")}>Restore Previous Ledger</button>}
-          </> : <>
-            <button disabled={backupAction !== null} onClick={() => void runBackupAction("import")}>Import Rostam backup</button>
-            {result.state === "missing" && <button disabled={backupAction !== null} onClick={() => load(true)}>Create local database</button>}
-          </>}
-          {result.state !== "imported" && <p>Import a Rostam backup to start logging workouts.</p>}
-        </>}
-      {backupAction && <p role="status">{backupAction === "export" ? "Preparing backup for Files…" : "Reading backup…"}</p>}
-      {backupNotice && <p role="status">{backupNotice}</p>}
-      {backupError && <p className="error" role="alert">{backupError}</p>}
+        </> : null}
     </main>
     {confirmRestore && <Modal title="Replace the local ledger?" onClose={() => setConfirmRestore(null)}>
       <p>{confirmRestore === "recovery" ? "Restore the most recent recovery copy."

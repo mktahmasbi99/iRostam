@@ -203,16 +203,18 @@ struct LocalLedger {
         try FileManager.default.createDirectory(
             at: databaseURL.deletingLastPathComponent(), withIntermediateDirectories: true
         )
+        guard let schemaURL = Bundle.main.url(forResource: "irostam-fresh-schema", withExtension: "sql"),
+              let schema = try? String(contentsOf: schemaURL, encoding: .utf8) else {
+            throw Failure.database
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let sql = schema.replacingOccurrences(of: "__IROSTAM_BOOTSTRAP_NOW__", with: formatter.string(from: Date()))
         try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) { database in
-            // shortcut: only the profile table exists on a fresh install until ledger migrations are ported.
-            let schema = """
-                CREATE TABLE IF NOT EXISTS profile_settings (
-                    id INTEGER PRIMARY KEY CHECK (id = 1),
-                    height_mm INTEGER CHECK (height_mm > 0),
-                    date_of_birth TEXT
-                )
-                """
-            guard sqlite3_exec(database, schema, nil, nil, nil) == SQLITE_OK else {
+            guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK,
+                  try Self.values(database, "PRAGMA integrity_check") == ["ok"],
+                  try Self.values(database, "PRAGMA foreign_key_check").isEmpty,
+                  try Self.values(database, "SELECT max(version) FROM schema_migrations") == ["17"] else {
                 throw Failure.database
             }
         }

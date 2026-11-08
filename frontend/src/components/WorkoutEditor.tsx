@@ -13,6 +13,7 @@ import { ReadState } from "./ReadState";
 import { SetForm } from "./SetForm";
 import { SetRow } from "./SetRow";
 import { SetTable } from "./SetTable";
+import { TimeWheelField } from "./TimeWheelField";
 
 export function WorkoutDetailsForm({ workout, day, today, timezone, onSave, onClose }: {
   workout?: Workout; day: string; today: string; timezone: string;
@@ -40,7 +41,7 @@ export function WorkoutDetailsForm({ workout, day, today, timezone, onSave, onCl
       void onSave(payload).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not save workout.")).finally(() => { saving.current = false; setBusy(false); });
     }}>
       <label>Workout name<input aria-label="Workout name" maxLength={100} placeholder="Workout" value={name} onChange={(event) => setName(event.target.value)} /></label>
-      {historical && <><p className="muted">Times use {timezone}.</p><label>Started<input aria-label="Workout start time" type="time" value={start} required onChange={(event) => setStart(event.target.value)} /></label><label>Ended<input aria-label="Workout end time" type="time" value={end} required onChange={(event) => setEnd(event.target.value)} /></label></>}
+      {historical && <><p className="muted">Times use {timezone}.</p><TimeWheelField label="Start time" value={start} onChange={setStart} /><TimeWheelField label="End time" value={end} onChange={setEnd} /></>}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="draft-actions"><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save workout"}</button></div>
     </form>
@@ -69,8 +70,8 @@ function WorkoutTimeForm({ workout, timezone, onSave, onClose }: {
       void onSave(payload).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not save workout time.")).finally(() => { saving.current = false; setBusy(false); });
     }}>
       <p className="muted">Times use {timezone}. Dates follow the workout and its active day.</p>
-      <label>Started<input aria-label="Workout start time" type="time" value={start} required onChange={(event) => setStart(event.target.value)} /></label>
-      {workout.endedAt && <label>Ended<input aria-label="Workout end time" type="time" value={end} required onChange={(event) => setEnd(event.target.value)} /></label>}
+      <TimeWheelField label="Start time" value={start} onChange={setStart} />
+      {workout.endedAt && <TimeWheelField label="End time" value={end} onChange={setEnd} />}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="draft-actions"><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save time"}</button></div>
     </form>

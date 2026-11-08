@@ -35,6 +35,15 @@ describe("MeasurementsPage layout content", () => {
     expect(screen.getByLabelText(/Waist/)).toHaveValue("102.5");
   });
 
+  it("invites the user to add missing profile details", async () => {
+    const user = userEvent.setup();
+    render(<MeasurementsPage today="2026-10-25" />);
+    expect(await screen.findByText(/Complete any missing profile details here/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Add profile details" }));
+    expect(screen.getByLabelText("Height cm")).toBeVisible();
+    expect(screen.getByLabelText("Date of birth")).toBeVisible();
+  });
+
   it("keeps trends based on the full range while loading older history on demand", async () => {
     const user = userEvent.setup();
     vi.mocked(api.bodyMeasurements)
