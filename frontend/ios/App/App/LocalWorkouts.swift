@@ -70,6 +70,11 @@ extension LocalLedger {
         if route.prefix(2) == ["api", "rotations"] {
             return try changeRotation(path, method: method, payload: payload)
         }
+        if route.prefix(2) == ["api", "activities"] || route.prefix(2) == ["api", "activity-entries"] ||
+            route.prefix(2) == ["api", "body-measurements"] || route == ["api", "profile"] ||
+            (route.count == 4 && route.prefix(2) == ["api", "days"] && route[3] == "note") {
+            return try changePersonalData(path, method: method, payload: payload)
+        }
         if route == ["api", "exercise-images"], method == "POST", let encoded = payload["image"] as? String {
             return try storeExerciseImage(encoded)
         }

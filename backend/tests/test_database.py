@@ -1338,3 +1338,12 @@ def test_activity_elapsed_duration_across_clock_changes(database, start, end, se
     result = database.finish_activity_entry(entry["id"], start, end, "")
     assert result["durationSeconds"] == seconds
     assert database.day(result["date"])["activities"][0]["durationSeconds"] == seconds
+
+
+def test_activity_can_finish_after_seconds(database):
+    activity = database.create_activity("Short activity")
+    entry = database.start_activity_entry(activity["id"], "2026-10-30T09:00")
+    result = database.finish_activity_entry(
+        entry["id"], "2026-10-30T09:00", "2026-10-30T09:00:30", ""
+    )
+    assert result["durationSeconds"] == 30

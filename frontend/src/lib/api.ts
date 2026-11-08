@@ -14,9 +14,9 @@ async function request<T>(path: string, init?: RequestInit, options: { clearDraf
     }
     if (path === "/api/config") {
       const { today, timezone } = await nativeLedger.startup({ create: false });
-      return { today, timezone, version: "0.7.0" } as T;
+      return { today, timezone, version: "0.8.0" } as T;
     }
-    if (path.startsWith("/api/exercises?") || path.startsWith("/api/rotations?") || path.startsWith("/api/rotation-recommendations?")) {
+    if (path.startsWith("/api/exercises?") || path.startsWith("/api/rotations?") || path.startsWith("/api/rotation-recommendations?") || path.startsWith("/api/activities?") || path === "/api/activity-note-groups") {
       return (await nativeLedger.history<{ items: T }>({ path })).items;
     }
     init?.signal?.throwIfAborted();

@@ -137,9 +137,34 @@ describe("ActivityEntryCard", () => {
     await user.click(startHour);
     await user.keyboard("{ArrowUp}");
     await user.click(screen.getByRole("button", { name: "Set time" }));
+    await user.click(screen.getByRole("button", { name: "End time" }));
+    await user.click(screen.getByRole("spinbutton", { name: "Minute" }));
+    await user.keyboard("{ArrowUp}");
+    await user.click(screen.getByRole("button", { name: "Set time" }));
     await user.click(screen.getByRole("button", { name: "Save session" }));
     await waitFor(() => expect(api.finishActivity).toHaveBeenCalled());
     expect(api.finishActivity).toHaveBeenCalledWith(entry.id, "2026-10-19T18:45", expect.stringMatching(/^2026-10-19T\d{2}:\d{2}$/), entry.note);
+  });
+
+  it("can finish a timed activity after only seconds and records the current time", async () => {
+    const user = userEvent.setup();
+    const startedAt = new Date(Date.now() - 30_000).toISOString();
+    const activeEntry = { ...entry, date: startedAt.slice(0, 10), startedAt, endedAt: null, durationSeconds: null };
+    vi.mocked(api.finishActivity).mockResolvedValue({ ...activeEntry, endedAt: new Date().toISOString(), durationSeconds: 30 });
+    render(<ActivityEntryCard entry={activeEntry} timezone="UTC" onChanged={vi.fn()} />);
+
+    const stop = await screen.findByRole("button", { name: "Stop BJJ – No Gi" });
+    expect(stop).toBeEnabled();
+    await user.click(stop);
+    expect(screen.getByRole("button", { name: "End time" })).toBeInTheDocument();
+    const save = screen.getByRole("button", { name: "Save session" });
+    expect(save).toBeEnabled();
+    await user.click(save);
+
+    await waitFor(() => expect(api.finishActivity).toHaveBeenCalled());
+    const [, savedStart, savedEnd] = vi.mocked(api.finishActivity).mock.calls[0];
+    expect(savedStart).toBe(`${activeEntry.date}T${startedAt.slice(11, 16)}`);
+    expect(new Date(savedEnd).getTime()).toBeGreaterThan(new Date(startedAt).getTime());
   });
 
   it("leaves the activity running when stopping is cancelled", async () => {

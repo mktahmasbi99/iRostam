@@ -11,6 +11,11 @@ extension LocalLedger {
         guard let url = URLComponents(string: path) else { throw Failure.database }
         let route = url.path.split(separator: "/").map(String.init)
         let query = url.queryItems ?? []
+        if route == ["api", "profile"] || route == ["api", "body-measurements"] ||
+            route == ["api", "body-measurements", "trends"] || route == ["api", "activities"] ||
+            route == ["api", "activity-notes"] || route == ["api", "activity-note-groups"] || route == ["api", "notes"] {
+            return try personalHistory(path)
+        }
         if route == ["api", "rotations"] {
             return ["items": try rotationList(query.first(where: { $0.name == "status" })?.value ?? "active")]
         }
@@ -46,7 +51,9 @@ extension LocalLedger {
                     return ["exercise": exercise, "displayOrder": index, "sets": sets, "total": Self.total(sets)]
                 }
                 let active = try Self.rows(db, Self.workoutSummaries + "WHERE w.ended_at IS NULL").first
-                return ["date": day, "sections": sections, "workouts": sessions, "activeWorkout": active as Any? ?? NSNull()]
+                let activities = try Self.activitiesForDay(db, day)
+                let note = try Self.rows(db, "SELECT body FROM daily_notes WHERE entry_date = ?", [day]).first?["body"]
+                return ["date": day, "sections": sections, "workouts": sessions, "activeWorkout": active as Any? ?? NSNull(), "activities": activities, "dailyNote": note as Any? ?? NSNull()]
             }
             if route.count == 3, route.prefix(2) == ["api", "calendar"] {
                 let month = route[2]
@@ -54,6 +61,9 @@ extension LocalLedger {
                       let end = Self.legacyCalendar.date(byAdding: .month, value: 1, to: start) else {
                     throw Failure.database
                 }
+                let localFormatter = Self.dateFormatter("yyyy-MM-dd", zone: .current)
+                guard let activityStart = localFormatter.date(from: month + "-01"),
+                      let activityEnd = Calendar.current.date(byAdding: .month, value: 1, to: activityStart) else { throw Failure.database }
                 let dates = try Self.rows(db, """
                     SELECT DISTINCT entry_date FROM exercise_sets WHERE entry_date LIKE ?
                     """, [month + "-%"])
@@ -62,9 +72,9 @@ extension LocalLedger {
                 active.formUnion(localWorkouts.compactMap { $0["native_day"] as? String })
                 for table in ["workouts", "activity_entries"] {
                     let legacyOnly = table == "workouts" ? " AND native_day IS NULL" : ""
-                    let rows = try Self.rows(db, """
-                        SELECT started_at FROM \(table) WHERE started_at >= ? AND started_at < ?\(legacyOnly)
-                        """, [Self.utcBoundary(start), Self.utcBoundary(end)])
+                    let boundsStart = table == "activity_entries" ? Self.utcBoundary(activityStart) : Self.utcBoundary(start)
+                    let boundsEnd = table == "activity_entries" ? Self.utcBoundary(activityEnd) : Self.utcBoundary(end)
+                    let rows = try Self.rows(db, "SELECT started_at FROM \(table) WHERE started_at >= ? AND started_at < ?\(legacyOnly)", [boundsStart, boundsEnd])
                     active.formUnion(rows.compactMap { Self.localTimestamp($0["started_at"], format: "yyyy-MM-dd") })
                 }
                 let today = Self.dateFormatter("yyyy-MM-dd", zone: .current).string(from: Date())

@@ -2488,19 +2488,14 @@ class RostamDatabase:
     def _validate_activity_range(self, start: datetime, end: datetime) -> None:
         local_start = start.astimezone(self.settings.timezone)
         local_end = end.astimezone(self.settings.timezone)
-        if (
-            local_start.second
-            or local_start.microsecond
-            or local_end.second
-            or local_end.microsecond
-        ):
-            raise DomainError("Activity times must be set to the minute.")
+        if local_start.second or local_start.microsecond:
+            raise DomainError("Activity start time must be set to the minute.")
         if (local_start.hour, local_start.minute) > (23, 58):
             raise DomainError("Start time must be no later than 23:58.")
         if local_start.date() != local_end.date():
             raise DomainError("Activity start and end must be on the same day.")
-        if end - start < timedelta(minutes=1):
-            raise DomainError("End time must be at least one minute after start time.")
+        if end <= start:
+            raise DomainError("End time must be after start time.")
 
     def _ensure_activity_interval_available(
         self,
