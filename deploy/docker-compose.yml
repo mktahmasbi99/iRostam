@@ -1,0 +1,12 @@
+services:
+  rostam:
+    image: ghcr.io/mktahmasbi99/rostam:latest
+    container_name: rostam
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      TZ: ${TZ:-Europe/Warsaw}
+      ROSTAM_DB: /data/rostam.sqlite3
+    volumes:
+      - ./data:/data

@@ -1,0 +1,102 @@
+import type { Equipment, ExerciseSet } from "./types";
+
+export const equipmentLabels: Record<Equipment, string> = {
+  resistance_band: "Resistance band",
+  resistance_tube: "Resistance tubes",
+  dumbbell: "Dumbbell",
+  barbell: "Barbell",
+  kettlebell: "Kettlebell",
+  cable: "Cable",
+  weight_machine: "Weight machine",
+  weighted_vest: "Weighted vest",
+  weight_plate: "Weight plate",
+  ankle_weights: "Ankle weights",
+  sandbag: "Sandbag",
+  other: "Other",
+};
+
+export const equipmentTitleLabels: Record<Exclude<Equipment, "other">, string> = {
+  resistance_band: "Resistance Bands",
+  resistance_tube: "Resistance tubes",
+  dumbbell: "Dumbbells",
+  barbell: "Barbell",
+  kettlebell: "Kettlebell",
+  cable: "Cable",
+  weight_machine: "Weight Machine",
+  weighted_vest: "Weighted Vest",
+  weight_plate: "Weight Plate",
+  ankle_weights: "Ankle Weights",
+  sandbag: "Sandbag",
+};
+
+export const muscleGroupNames: Record<string, string> = {
+  abs: "Abs", back: "Back", biceps: "Biceps", calves: "Calves", chest: "Chest",
+  forearms: "Forearms", glutes: "Glutes", hamstrings: "Hamstrings",
+  hip_flexors: "Hip Flexors", quadriceps: "Quadriceps", shoulders: "Shoulders", triceps: "Triceps",
+};
+
+export function exerciseMuscleNames(exercise: { primaryMuscle?: string | null; secondaryMuscles?: string[] }): string[] {
+  return [exercise.primaryMuscle, ...(exercise.secondaryMuscles ?? [])]
+    .filter((slug): slug is string => Boolean(slug))
+    .map((slug) => muscleGroupNames[slug] ?? slug.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()));
+}
+
+export function exerciseMuscleLabel(exercise: { primaryMuscle?: string | null; secondaryMuscles?: string[] }): string {
+  const names = (slugs: string[]) => slugs.map((slug) => muscleGroupNames[slug] ?? slug.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()));
+  const primary = exercise.primaryMuscle ? names([exercise.primaryMuscle])[0] : "";
+  const secondary = names(exercise.secondaryMuscles ?? []);
+  return [primary, secondary.length ? `(${secondary.join(", ")})` : ""].filter(Boolean).join(" ");
+}
+
+export function exerciseTitle(baseName: string, equipment: Equipment | null, customEquipment: string): string {
+  const base = baseName.trim().replace(/\s+/g, " ");
+  if (!equipment) return base;
+  const suffix = equipment === "other" ? customEquipment.trim().replace(/\s+/g, " ") : equipmentTitleLabels[equipment];
+  return suffix ? `${base} (${suffix})` : base;
+}
+
+export function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
+}
+
+export function formatHoldDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  if (!minutes) return `${remainder}s`;
+  if (!remainder) return `${minutes}m`;
+  return `${minutes}m ${remainder}s`;
+}
+
+export function formatMeasurement(set: ExerciseSet): string {
+  if (set.repetitions !== null && set.holdMinutes !== null && set.holdSeconds !== null) {
+    return `${set.repetitions} reps × ${formatHoldDuration(set.holdMinutes * 60 + set.holdSeconds)} hold`;
+  }
+  if (set.repetitions !== null) return `${set.repetitions} reps`;
+  return formatDuration((set.durationMinutes ?? 0) * 60 + (set.durationSeconds ?? 0));
+}
+
+export function formatResistance(set: ExerciseSet): string {
+  if (set.resistanceKind === "bodyweight") return "Bodyweight";
+  const equipment = set.equipment === "other" ? set.customEquipment : set.equipment && equipmentLabels[set.equipment];
+  return `${set.weightKg} kg · ${equipment}`;
+}
+
+export function formatExerciseTotal(exercise: { measurementType: string }, amount: number, sets: ExerciseSet[]): string {
+  if (exercise.measurementType === "repetitions") return `${amount} reps`;
+  if (exercise.measurementType === "duration") return formatDuration(amount);
+  const holds = [...new Set(sets.map((set) => (set.holdMinutes ?? 0) * 60 + (set.holdSeconds ?? 0)))];
+  const formattedHolds = holds.map(formatHoldDuration).join(", ");
+  return holds.length === 1 ? `${amount} reps × ${formattedHolds} hold` : `${amount} reps · ${formattedHolds} holds`;
+}
+
+export function formatDay(day: string, today: string): string {
+  if (day === today) return "Today";
+  const selectedDate = new Date(`${day}T00:00:00Z`);
+  selectedDate.setUTCDate(selectedDate.getUTCDate() + 1);
+  if (selectedDate.toISOString().slice(0, 10) === today) return "Yesterday";
+  return new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" }).format(
+    new Date(`${day}T12:00:00`),
+  );
+}
