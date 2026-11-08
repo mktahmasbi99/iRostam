@@ -15,7 +15,7 @@ function formatTime(minutes: number) {
 function Wheel({ label, values, selected, onSelect, disabledValues = [] }: { label: string; values: number[]; selected: number; onSelect: (value: number) => void; disabledValues?: number[] }) {
   const scroller = useRef<HTMLDivElement>(null);
   const lastSelection = useRef(selected);
-  const mouseDrag = useRef<{ y: number; top: number } | null>(null);
+  const mouseDrag = useRef<{ y: number; top: number; moved: boolean } | null>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const valuesKey = values.join(",");
   useLayoutEffect(() => {
@@ -88,13 +88,14 @@ function Wheel({ label, values, selected, onSelect, disabledValues = [] }: { lab
         onPointerDown={(event) => {
           if (event.pointerType !== "mouse" || event.button !== 0) return;
           clearTimeout(settleTimer.current);
-          mouseDrag.current = { y: event.clientY, top: event.currentTarget.scrollTop };
+          mouseDrag.current = { y: event.clientY, top: event.currentTarget.scrollTop, moved: false };
         }}
         onPointerMove={(event) => {
           const drag = mouseDrag.current;
           if (!drag || event.pointerType !== "mouse" || !(event.buttons & 1)) return;
           const distance = drag.y - event.clientY;
           if (Math.abs(distance) > 4) {
+            drag.moved = true;
             event.currentTarget.style.scrollSnapType = "none";
             event.currentTarget.setPointerCapture(event.pointerId);
             event.currentTarget.scrollTop = drag.top + distance;
@@ -107,10 +108,14 @@ function Wheel({ label, values, selected, onSelect, disabledValues = [] }: { lab
           handleScroll();
         }}
         onPointerCancel={(event) => { mouseDrag.current = null; event.currentTarget.style.scrollSnapType = ""; }}
+        onClickCapture={(event) => {
+          if (mouseDrag.current?.moved) { event.preventDefault(); event.stopPropagation(); }
+          mouseDrag.current = null;
+        }}
         >
         {values.map((value, index) => {
           const offset = index - values.indexOf(selected);
-          return <div aria-hidden="true" key={value} style={{ transform: `perspective(220px) rotateX(${offset * -10}deg) scale(${1 - Math.min(Math.abs(offset) * 0.035, 0.14)})` }} className={`time-wheel-option ${value === selected ? "selected" : ""} ${disabled.has(value) ? "disabled" : ""}`}>{String(value).padStart(2, "0")}</div>;
+          return <div aria-hidden="true" key={value} onClick={() => { if (!disabled.has(value)) onSelect(value); }} style={{ transform: `perspective(220px) rotateX(${offset * -10}deg) scale(${1 - Math.min(Math.abs(offset) * 0.035, 0.14)})` }} className={`time-wheel-option ${value === selected ? "selected" : ""} ${disabled.has(value) ? "disabled" : ""}`}>{String(value).padStart(2, "0")}</div>;
         })}
       </div>
     </div>
