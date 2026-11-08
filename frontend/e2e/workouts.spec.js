@@ -118,8 +118,7 @@ test("backfilled workout preserves the live workout and supports confirmed remov
   await expect(page.getByRole("menuitem", { name: /Start workout/ })).toHaveCount(1);
   await page.getByRole("menuitem", { name: /Start workout/ }).click();
   await page.getByLabel("Workout name").fill("Past gym");
-  const start = await page.getByLabel("Workout start time").inputValue();
-  await page.getByLabel("Workout end time").fill(`${start.slice(0, 10)}T12:00`);
+  await page.getByLabel("Workout end time").fill("12:00");
   await page.getByRole("button", { name: "Save workout", exact: true }).click();
   await expect(page.getByText("Recorded workout", { exact: true })).toBeVisible();
   expect((await (await request.get(`${origin}/api/workouts/active`)).json()).id).toBe(live.id);

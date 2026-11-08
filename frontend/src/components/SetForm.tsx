@@ -23,8 +23,7 @@ export function SetForm({ exercise, day, existing, onSaved, onCancel, onDelete, 
   const form = useRef<HTMLFormElement>(null);
   const writing = useRef(false);
   const initialLocal = workout ? workoutLocalTime(existing?.occurredAt ?? (workout.endedAt ? workout.startedAt : new Date().toISOString()), workout.timezone) : "";
-  const [setDate, setSetDate] = useState(initialLocal.slice(0, 10) || day);
-  const [dateEdited, setDateEdited] = useState(false);
+  const [setDate] = useState(initialLocal.slice(0, 10) || day);
   const [time, setTime] = useState(existing?.time ?? initialLocal.slice(11));
   const [timeEdited, setTimeEdited] = useState(false);
   const [repetitions, setRepetitions] = useState(existing?.repetitions?.toString() ?? "");
@@ -43,15 +42,7 @@ export function SetForm({ exercise, day, existing, onSaved, onCancel, onDelete, 
   const measurementEdited = useRef({ repetitions: false, duration: false, hold: false });
   const resistanceEdited = useRef(false);
   const timeEditedRef = useRef(false);
-  const firstMeasurementInput = useRef<HTMLInputElement>(null);
   const [suggested, setSuggested] = useState({ repetitions: false, duration: false, hold: false, weight: false });
-
-  useEffect(() => {
-    const firstMeasurementSuggested = exercise.measurementType === "duration" ? suggested.duration : suggested.repetitions;
-    if (!existing && !loading && firstMeasurementInput.current && firstMeasurementSuggested) {
-      firstMeasurementInput.current.select();
-    }
-  }, [existing, exercise.measurementType, loading, suggested.duration, suggested.repetitions]);
 
   function applyPrefill(prefill: Awaited<ReturnType<typeof api.prefill>>) {
     if (!measurementEdited.current.repetitions) {
@@ -118,7 +109,10 @@ export function SetForm({ exercise, day, existing, onSaved, onCancel, onDelete, 
 
   async function save() {
     if (writing.current) return;
-    if (form.current && !form.current.reportValidity()) return;
+    if (form.current && !form.current.checkValidity()) {
+      setError("Complete the required fields with valid values.");
+      return;
+    }
     setError("");
     if (!time) { setError("Choose a set time."); return; }
     const parsedDuration = parseDurationValue(duration);
@@ -133,6 +127,8 @@ export function SetForm({ exercise, day, existing, onSaved, onCancel, onDelete, 
       return;
     }
     const bodyweight = !exercise.equipment || (exercise.allowBodyweight && Number(weight) === 0);
+    const focused = document.activeElement;
+    if (focused instanceof HTMLInputElement && focused.inputMode && form.current?.contains(focused)) focused.blur();
     writing.current = true;
     setSaving(true);
     const payload: SetPayload = {
@@ -148,8 +144,8 @@ export function SetForm({ exercise, day, existing, onSaved, onCancel, onDelete, 
     try {
       if (workout) {
         payload.time = null;
-        payload.occurredAt = existing && !timeEdited && !dateEdited ? existing.occurredAt
-          : !existing && !timeEdited && !dateEdited ? (workout.endedAt ? workout.startedAt : null) : `${setDate}T${time}`;
+        payload.occurredAt = existing && !timeEdited ? existing.occurredAt
+          : !existing && !timeEdited ? (workout.endedAt ? workout.startedAt : null) : `${setDate}T${time}`;
       }
       if (existing) await api.updateSet(existing.id, payload);
       else if (workout) await api.addWorkoutSet(workout.id, workout.entryId, payload);
@@ -166,13 +162,12 @@ export function SetForm({ exercise, day, existing, onSaved, onCancel, onDelete, 
   if (loading && !prefillLoaded) return <div className="set-draft skeleton" role="status">Loading previous set…</div>;
 
   return (
-    <SwipeSetRow onDelete={existing && !onDelete ? undefined : remove} disabled={saving || deleting} error={deleteError}><form ref={form} className="set-draft" data-update-dirty={`set-entry-${workout?.entryId ?? exercise.id}`} data-update-dirty-label="Set entry" onSubmit={(event) => { event.preventDefault(); if (!deleting) void save(); }}>
-      {workout && <label className="workout-set-date">Set date<input aria-label="Set date" type="date" value={setDate} required onChange={(event) => { setSetDate(event.target.value); setDateEdited(true); }} onBlur={() => void refreshPrefill(time)} /></label>}
+    <SwipeSetRow onDelete={existing && !onDelete ? undefined : remove} disabled={saving || deleting} error={deleteError}><form ref={form} noValidate className="set-draft" data-update-dirty={`set-entry-${workout?.entryId ?? exercise.id}`} data-update-dirty-label="Set entry" onSubmit={(event) => { event.preventDefault(); if (!deleting) void save(); }}>
       <div className="set-form-grid set-cells">
         <TimeWheelField label="Time" value={time} onChange={(value) => { setTime(value); setTimeEdited(true); timeEditedRef.current = true; void refreshPrefill(value); }} />
         {exercise.equipment && <input aria-label="kg" aria-describedby={exercise.allowBodyweight ? hintId : undefined} className={`set-weight-input${suggested.weight ? " suggested-value" : ""}`} inputMode="decimal" value={weight} onFocus={(event) => suggested.weight && event.currentTarget.select()} onClick={(event) => suggested.weight && event.currentTarget.select()} onChange={(event) => editWeight(event.target.value)} required />}
-        {exercise.measurementType !== "duration" && <input aria-label="Reps" ref={firstMeasurementInput} className={suggested.repetitions ? "suggested-value" : ""} type="number" min="1" step="1" inputMode="numeric" value={repetitions} onFocus={(event) => suggested.repetitions && event.currentTarget.select()} onClick={(event) => suggested.repetitions && event.currentTarget.select()} onChange={(event) => editMeasurement("repetitions", event.target.value, setRepetitions)} required autoFocus />}
-        {exercise.measurementType === "duration" && <DurationInput label="Duration" inputRef={firstMeasurementInput} value={duration} suggested={suggested.duration} onChange={(value) => editMeasurement("duration", value, setDuration)} invalid={invalidDuration} autoFocus />}
+        {exercise.measurementType !== "duration" && <input aria-label="Reps" className={suggested.repetitions ? "suggested-value" : ""} type="number" min="1" step="1" inputMode="numeric" value={repetitions} onFocus={(event) => suggested.repetitions && event.currentTarget.select()} onClick={(event) => suggested.repetitions && event.currentTarget.select()} onChange={(event) => editMeasurement("repetitions", event.target.value, setRepetitions)} required />}
+        {exercise.measurementType === "duration" && <DurationInput label="Duration" value={duration} suggested={suggested.duration} onChange={(value) => editMeasurement("duration", value, setDuration)} invalid={invalidDuration} />}
         {exercise.measurementType === "timed_repetitions" && <DurationInput label="Hold per repetition" value={hold} suggested={suggested.hold} onChange={(value) => editMeasurement("hold", value, setHold)} invalid={invalidDuration} />}
         <label className="set-completion"><input type="checkbox" className="set-checkbox" aria-label="Save set" checked={false} disabled={saving || deleting} onChange={() => form.current?.requestSubmit()} /></label>
       </div>

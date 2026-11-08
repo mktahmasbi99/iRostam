@@ -355,6 +355,7 @@ it("does not save an invalid row when its checkbox is clicked", async () => {
   await user.click(checkbox);
   expect(checkbox).not.toBeChecked();
   expect(input).toBeInvalid();
+  expect(input).not.toHaveFocus();
   expect(api.addSet).toHaveBeenCalledTimes(calls);
 });
 
@@ -368,7 +369,8 @@ it("saves a backfilled workout set through its membership endpoint and keeps val
   render(<SetForm exercise={exercise} day="2026-10-30" workout={{ id: 7, entryId: 11, startedAt: "2026-10-30T08:00:00Z", endedAt: "2026-10-30T09:00:00Z", timezone: "Europe/Warsaw" }} onSaved={vi.fn()} onCancel={vi.fn()} />);
   await screen.findByDisplayValue("12");
   expect(addWorkoutSet).not.toHaveBeenCalled();
-  expect(screen.getByLabelText("Set date")).toHaveValue("2026-10-30");
+  expect(screen.queryByLabelText("Set date")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Reps")).not.toHaveFocus();
   await user.click(screen.getByRole("checkbox", { name: "Save set" }));
   await waitFor(() => expect(addWorkoutSet).toHaveBeenCalledWith(7, 11, expect.objectContaining({ occurredAt: "2026-10-30T08:00:00Z", repetitions: 12 })));
   expect(await screen.findByRole("alert")).toHaveTextContent("Set time must be within");

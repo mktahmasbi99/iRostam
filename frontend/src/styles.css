@@ -650,7 +650,7 @@ fieldset.dialog-content-controls { display: contents; min-width: 0; margin: 0; p
 :root[data-theme="dark"] body { background-color: #071a2d; }
 :root[data-theme="dark"] input, :root[data-theme="dark"] select, :root[data-theme="dark"] .segmented button.selected, :root[data-theme="dark"] .modal-sheet, :root[data-theme="dark"] .picture-picker { background: var(--input); color: var(--ink); border-color: var(--line); }
 :root[data-theme="dark"] .set-draft { background: var(--surface-2); }
-:root[data-theme="light"] .exercise-image img.bundled-exercise-art { filter: invert(1); }
+:root:not([data-theme="dark"]) .exercise-image img.bundled-exercise-art { filter: invert(1); }
 :root[data-theme="dark"] .bottom-nav { background: var(--surface); }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -680,8 +680,6 @@ fieldset.dialog-content-controls { display: contents; min-width: 0; margin: 0; p
 .workout-details input { width: 100%; min-width: 0; }
 .workout-numbered-set { position: relative; padding-left: 22px; }
 .workout-set-number { position: absolute; top: 18px; left: 8px; font-size: .75rem; color: var(--muted); }
-.workout-set-date { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; color: var(--muted); font-size: .8rem; }
-.workout-set-date input { max-width: 170px; }
 .workout-resume-banner { width: 100%; margin-top: 16px; background: var(--accent-soft); color: var(--accent-dark); }
 @media (max-width: 480px) {
   .workout-summary-card { padding: 16px; }

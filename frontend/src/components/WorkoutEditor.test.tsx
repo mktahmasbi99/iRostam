@@ -99,8 +99,10 @@ it("submits editable start and end times for a historical workout", async () => 
   render(<WorkoutDetailsForm day="2026-10-30" today="2026-10-31" timezone="Europe/Warsaw" onSave={onSave} onClose={vi.fn()} />);
   const start = screen.getByLabelText("Workout start time");
   const end = screen.getByLabelText("Workout end time");
-  fireEvent.change(start, { target: { value: "2026-10-30T18:00" } });
-  fireEvent.change(end, { target: { value: "2026-10-30T19:00" } });
+  expect(start).toHaveAttribute("type", "time");
+  expect(end).toHaveAttribute("type", "time");
+  fireEvent.change(start, { target: { value: "18:00" } });
+  fireEvent.change(end, { target: { value: "19:00" } });
   await user.click(screen.getByRole("button", { name: "Save workout" }));
   expect(onSave).toHaveBeenCalledWith({ name: "Workout", startedAt: "2026-10-30T18:00", endedAt: "2026-10-30T19:00" });
 });
