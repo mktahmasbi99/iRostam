@@ -14,7 +14,7 @@ async function request<T>(path: string, init?: RequestInit, options: { clearDraf
     }
     if (path === "/api/config") {
       const { today, timezone } = await nativeLedger.startup({ create: false });
-      return { today, timezone, version: "0.6.3" } as T;
+      return { today, timezone, version: "0.7.0" } as T;
     }
     if (path.startsWith("/api/exercises?") || path.startsWith("/api/rotations?") || path.startsWith("/api/rotation-recommendations?")) {
       return (await nativeLedger.history<{ items: T }>({ path })).items;

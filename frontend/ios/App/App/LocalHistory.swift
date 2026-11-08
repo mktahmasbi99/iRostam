@@ -18,6 +18,9 @@ extension LocalLedger {
             let days = Int(query.first(where: { $0.name == "days" })?.value ?? "") ?? 7
             return ["items": try rotationRecommendations(days)]
         }
+        if route == ["api", "exercise-recommendations"] {
+            return try exerciseRecommendations(path)
+        }
         return try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READONLY) { db in
             if route.count == 3, route.prefix(2) == ["api", "days"] {
                 let day = route[2]
@@ -160,6 +163,8 @@ extension LocalLedger {
         SELECT e.id, e.name, e.base_name AS baseName, e.measurement_type AS measurementType,
             e.equipment, e.custom_equipment AS customEquipment, e.allow_bodyweight AS allowBodyweight,
             e.image_key AS imageKey, e.exercise_note AS exerciseNote, e.archived_at AS archivedAt,
+            e.recommendation_paused_until AS recommendationPausedUntil,
+            e.recommendation_paused_forever AS recommendationPausedForever,
             EXISTS(SELECT 1 FROM exercise_sets s WHERE s.exercise_id = e.id) AS hasHistory
         FROM exercises e
 

@@ -87,6 +87,13 @@ extension LocalLedger {
             } else if route.count == 4 && route[3] == "note" && method == "PUT", let body = payload["body"] as? String {
                 let note: Any = body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSNull() : body
                 _ = try Self.rows(db, "UPDATE exercises SET exercise_note = ?, updated_at = ? WHERE id = ?", [note, stamp, id])
+            } else if route.count == 4 && route[3] == "recommendation-pause" && method == "PUT" {
+                let period = payload["period"] as? String ?? ""
+                let until = try Self.recommendationPauseUntil(period)
+                _ = try Self.rows(db, """
+                    UPDATE exercises SET recommendation_paused_until = ?, recommendation_paused_forever = ?, updated_at = ?
+                    WHERE id = ?
+                    """, [until as Any? ?? NSNull(), period == "forever" ? 1 : 0, stamp, id])
             } else if route.count == 4 && ["archive", "restore"].contains(route[3]) && method == "POST" {
                 let archiving = route[3] == "archive"
                 if archiving { try Self.removeExerciseFromRotations(db, id) }
@@ -129,6 +136,134 @@ extension LocalLedger {
 
     private static func foldExerciseName(_ name: String) -> String {
         name.folding(options: .caseInsensitive, locale: Locale(identifier: "en_US_POSIX"))
+    }
+
+    func exerciseRecommendations(_ path: String) throws -> Row {
+        guard let components = URLComponents(string: path),
+              let day = components.queryItems?.first(where: { $0.name == "day" })?.value,
+              let dayDate = Self.dateFormatter("yyyy-MM-dd", zone: .current).date(from: day),
+              Self.dateFormatter("yyyy-MM-dd", zone: .current).string(from: dayDate) == day else {
+            throw WorkoutError("Choose a valid recommendation date.")
+        }
+        let query = components.queryItems?.first(where: { $0.name == "query" })?.value ?? ""
+        let measurement = components.queryItems?.first(where: { $0.name == "measurementType" })?.value
+        let muscle = components.queryItems?.first(where: { $0.name == "muscleGroup" })?.value
+        let role = components.queryItems?.first(where: { $0.name == "muscleRole" })?.value ?? "any"
+        let sort = components.queryItems?.first(where: { $0.name == "sort" })?.value ?? "recommended"
+        let includePaused = components.queryItems?.first(where: { $0.name == "includePaused" })?.value == "true"
+        guard measurement == nil || ["repetitions", "duration", "timed_repetitions"].contains(measurement!),
+              role == "any" || role == "primary" || role == "secondary",
+              sort == "recommended" || sort == "muscle" || sort == "exercise" else {
+            throw WorkoutError("Invalid exercise recommendation filter.")
+        }
+        let normalizedQuery = query.precomposedStringWithCompatibilityMapping
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased()
+        let today = Self.dateFormatter("yyyy-MM-dd", zone: .current).string(from: Date())
+        let groups = try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READONLY) { db -> Row in
+            if let muscle, try Self.rows(db, "SELECT slug FROM muscle_groups WHERE slug = ?", [muscle]).isEmpty {
+                throw WorkoutError("Invalid muscle group.")
+            }
+            let exerciseRows = try Self.rows(db, Self.exerciseFields + """
+                LEFT JOIN exercise_sets s ON s.exercise_id = e.id AND s.entry_date <= ?
+                WHERE e.archived_at IS NULL GROUP BY e.id
+                """, [day])
+            var items: [Row] = []
+            for row in exerciseRows {
+                guard let id = row["id"] as? Int else { throw Failure.database }
+                let exercise = try Self.exerciseDetails(db, row)
+                if !normalizedQuery.isEmpty,
+                   !(row["normalized_name"] as? String ?? row["name"] as? String ?? "").lowercased().contains(normalizedQuery) { continue }
+                if let measurement, exercise["measurementType"] as? String != measurement { continue }
+                let primary = exercise["primaryMuscle"] as? String
+                let secondary = exercise["secondaryMuscles"] as? [String] ?? []
+                let matchesMuscle = muscle == nil ||
+                    ((role == "any" || role == "primary") && primary == muscle) ||
+                    ((role == "any" || role == "secondary") && secondary.contains(muscle!))
+                if !matchesMuscle { continue }
+                let pausedUntil = exercise["recommendationPausedUntil"] as? String
+                let paused = (exercise["recommendationPausedForever"] as? Int ?? 0) != 0 ||
+                    (pausedUntil.map { $0 > today } ?? false)
+                if paused && !includePaused && normalizedQuery.isEmpty { continue }
+                let last = try Self.rows(db, "SELECT MAX(entry_date) AS date FROM exercise_sets WHERE exercise_id = ? AND entry_date <= ?", [id, day]).first?["date"] as? String
+                let days = last.flatMap { Self.dateFormatter("yyyy-MM-dd", zone: .current).date(from: $0) }
+                    .map { Calendar.current.dateComponents([.day], from: $0, to: dayDate).day ?? 0 }
+                items.append(["exercise": exercise, "lastDoneDate": last as Any? ?? NSNull(),
+                              "daysSinceLastDone": days as Any? ?? NSNull(), "paused": paused])
+            }
+
+            let primaryDates = try Self.rows(db, """
+                SELECT em.muscle_slug AS muscle, MAX(s.entry_date) AS lastDate
+                FROM exercise_muscles em JOIN exercise_sets s ON s.exercise_id = em.exercise_id
+                WHERE em.role = 'primary' AND s.entry_date <= ? GROUP BY em.muscle_slug
+                """, [day])
+            let trained = Dictionary(uniqueKeysWithValues: primaryDates.compactMap { row -> (String, String)? in
+                guard let muscle = row["muscle"] as? String, let date = row["lastDate"] as? String else { return nil }
+                return (muscle, date)
+            })
+            var byPrimary: [String: [Row]] = [:]
+            var unclassified: [Row] = []
+            var neverTried: [Row] = []
+            for item in items {
+                guard let last = item["lastDoneDate"] as? String else { neverTried.append(item); continue }
+                if let muscle = (item["exercise"] as? Row)?["primaryMuscle"] as? String { byPrimary[muscle, default: []].append(item) }
+                else { unclassified.append(item) }
+                _ = last
+            }
+            func name(_ item: Row) -> String { ((item["exercise"] as? Row)?["name"] as? String ?? "").lowercased() }
+            func orderRecent(_ lhs: Row, _ rhs: Row) -> Bool {
+                let a = lhs["daysSinceLastDone"] as? Int ?? 0
+                let b = rhs["daysSinceLastDone"] as? Int ?? 0
+                return a == b ? name(lhs) < name(rhs) : a > b
+            }
+            for key in Array(byPrimary.keys) { byPrimary[key]?.sort(by: orderRecent) }
+            unclassified.sort(by: orderRecent)
+            neverTried.sort { name($0) < name($1) }
+            let muscleNames = Dictionary(uniqueKeysWithValues: try Self.rows(db, "SELECT slug, name FROM muscle_groups ORDER BY display_order").compactMap { row -> (String, String)? in
+                guard let slug = row["slug"] as? String, let name = row["name"] as? String else { return nil }
+                return (slug, name)
+            })
+            var recommendationGroups: [Row] = byPrimary.map { slug, exercises in
+                let last = trained[slug]
+                let days = last.flatMap { Self.dateFormatter("yyyy-MM-dd", zone: .current).date(from: $0) }
+                    .map { Calendar.current.dateComponents([.day], from: $0, to: dayDate).day ?? 0 }
+                return ["muscle": slug, "muscleName": muscleNames[slug] ?? slug,
+                        "lastTrainedDate": last as Any? ?? NSNull(),
+                        "daysSinceLastTrained": days as Any? ?? NSNull(), "exercises": exercises]
+            }
+            if sort == "muscle" {
+                recommendationGroups.sort { ($0["muscleName"] as? String ?? "") < ($1["muscleName"] as? String ?? "") }
+            } else {
+                recommendationGroups.sort { lhs, rhs in
+                    let a = lhs["daysSinceLastTrained"] as? Int
+                    let b = rhs["daysSinceLastTrained"] as? Int
+                    if (a == nil) != (b == nil) { return a != nil }
+                    return a == b ? (lhs["muscleName"] as? String ?? "") < (rhs["muscleName"] as? String ?? "") : (a ?? 0) > (b ?? 0)
+                }
+            }
+            var allExercises = recommendationGroups.flatMap { $0["exercises"] as? [Row] ?? [] } + unclassified + neverTried
+            if sort == "exercise" { allExercises.sort { name($0) < name($1) } }
+            let muscleGroups = try Self.rows(db, "SELECT slug, name FROM muscle_groups ORDER BY display_order")
+            return ["groups": recommendationGroups, "unclassified": unclassified, "neverTried": neverTried,
+                    "allExercises": allExercises, "muscleGroups": muscleGroups]
+        }
+        return groups
+    }
+
+    private static func recommendationPauseUntil(_ period: String) throws -> String? {
+        let today = dateFormatter("yyyy-MM-dd", zone: .current).string(from: Date())
+        guard let date = dateFormatter("yyyy-MM-dd", zone: .current).date(from: today) else { throw Failure.database }
+        let calendar = Calendar(identifier: .gregorian)
+        let until: Date?
+        switch period {
+        case "week": until = calendar.date(byAdding: .day, value: 7, to: date)
+        case "month": until = calendar.date(byAdding: .month, value: 1, to: date)
+        case "six_months": until = calendar.date(byAdding: .month, value: 6, to: date)
+        case "year": until = calendar.date(byAdding: .month, value: 12, to: date)
+        case "forever", "resume": until = nil
+        default: throw WorkoutError("Invalid recommendation pause period.")
+        }
+        guard period == "forever" || period == "resume" || until != nil else { throw WorkoutError("Could not calculate pause date.") }
+        return until.map { dateFormatter("yyyy-MM-dd", zone: .current).string(from: $0) }
     }
 
     private static func checkExerciseName(_ db: OpaquePointer, _ name: String, excluding id: Int = 0) throws {

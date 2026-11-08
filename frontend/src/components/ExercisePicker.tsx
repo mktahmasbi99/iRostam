@@ -10,7 +10,6 @@ import { Modal } from "./Modal";
 import { ReadState } from "./ReadState";
 
 interface Props {
-  rotationOnly?: boolean;
   day: string;
   today?: string;
   presentIds: number[];
@@ -54,7 +53,7 @@ function exerciseRecommendationRuns(recommendations: ExerciseRecommendations): R
   }, []);
 }
 
-export function ExercisePicker({ day, today, presentIds, onChoose, onClose, rotationOnly = false }: Props) {
+export function ExercisePicker({ day, today, presentIds, onChoose, onClose }: Props) {
   const [view, setView] = useState<View>("library");
   const [rotation, setRotation] = useState<Rotation | null>(null);
   const [loadingRotation, setLoadingRotation] = useState(true);
@@ -91,7 +90,7 @@ export function ExercisePicker({ day, today, presentIds, onChoose, onClose, rota
       if (current) { setView("recommendations"); setRecommendationMode("rotation"); }
       else {
         const last = window.localStorage.getItem("rostam-picker-view");
-        if (!rotationOnly && (last === "exercise" || last === "muscle")) {
+        if (last === "exercise" || last === "muscle") {
           restoringPreference.current = true;
           setView("recommendations"); setRecommendationMode(last);
         }
@@ -99,7 +98,7 @@ export function ExercisePicker({ day, today, presentIds, onChoose, onClose, rota
     }).catch(() => { /* Library remains available if rotations cannot load. */ })
       .finally(() => active && setLoadingRotation(false));
     return () => { active = false; };
-  }, [day, today, rotationOnly]);
+  }, [day, today]);
 
   function selectRecommendationMode(mode: RecommendationMode) {
     restoringPreference.current = false;
@@ -192,8 +191,8 @@ export function ExercisePicker({ day, today, presentIds, onChoose, onClose, rota
       <div className="recommendation-toolbar"><button className="secondary" onClick={() => { setView("library"); window.localStorage.setItem("rostam-picker-view", "library"); }}>Go to exercise library</button><button className="primary icon-only-action picker-create-icon" aria-label="New exercise" title="New exercise" onClick={() => setCreating(true)}><Plus /></button></div>
       <div className="segmented recommendation-mode" role="group" aria-label="Recommendation view">
         {rotation && <button type="button" className={recommendationMode === "rotation" ? "selected" : ""} aria-pressed={recommendationMode === "rotation"} onClick={() => selectRecommendationMode("rotation")}>Rotation</button>}
-        {!rotationOnly && <><button type="button" className={recommendationMode === "exercise" ? "selected" : ""} aria-pressed={recommendationMode === "exercise"} onClick={() => selectRecommendationMode("exercise")}>By exercise</button>
-          <button type="button" className={recommendationMode === "muscle" ? "selected" : ""} aria-pressed={recommendationMode === "muscle"} onClick={() => selectRecommendationMode("muscle")}>By muscle</button></>}
+        <button type="button" className={recommendationMode === "exercise" ? "selected" : ""} aria-pressed={recommendationMode === "exercise"} onClick={() => selectRecommendationMode("exercise")}>By exercise</button>
+        <button type="button" className={recommendationMode === "muscle" ? "selected" : ""} aria-pressed={recommendationMode === "muscle"} onClick={() => selectRecommendationMode("muscle")}>By muscle</button>
       </div>
       <p className="recommendation-intro">{recommendationMode === "rotation" ? "Your due exercise comes first, followed by the rest of your rotation." : recommendationMode === "exercise" ? "Suggestions are ordered by when you last did each exercise." : "Suggestions are ordered by the muscle groups you have trained least recently."}</p>
       {recommendationMode === "rotation" && rotation && <label className="search-box rotation-recommendation-search"><Search /><span className="sr-only">Search exercises in {rotation.name}</span><input type="search" placeholder="Search exercises in this rotation" value={rotationQuery} onChange={(event) => setRotationQuery(event.target.value)} /></label>}
@@ -244,7 +243,7 @@ export function ExercisePicker({ day, today, presentIds, onChoose, onClose, rota
   return <Modal title="Add exercise" onClose={onClose} wide>
     <div className="picker-toolbar"><label className="search-box"><Search /><span className="sr-only">Search exercises</span><input type="search" placeholder="Search exercises" value={query} onChange={(event) => { exerciseSearchController.current?.abort(); setImmediateQuery(null); setQuery(event.target.value); }} autoFocus /></label><button className="primary icon-only-action picker-create-icon" aria-label="New exercise" title="New exercise" onClick={() => setCreating(true)}><Plus /></button></div>
     <div className="filter-row" aria-label="Measurement filter"><button className={!filter ? "selected" : ""} onClick={() => { setImmediateQuery(query); setFilter(""); }}>All</button><button className={filter === "repetitions" ? "selected" : ""} onClick={() => { setImmediateQuery(query); setFilter("repetitions"); }}>Reps</button><button className={filter === "duration" ? "selected" : ""} onClick={() => { setImmediateQuery(query); setFilter("duration"); }}>Duration</button><button className={filter === "timed_repetitions" ? "selected" : ""} onClick={() => { setImmediateQuery(query); setFilter("timed_repetitions"); }}>Timed reps</button></div>
-    {!rotationOnly && <button className="secondary recommendations-button icon-only-action" aria-label="Show recommendations" title="Show recommendations" onClick={() => { selectRecommendationMode(rotation ? "rotation" : "exercise"); setView("recommendations"); }}><Sparkles /></button>}
+    <button className="secondary recommendations-button icon-only-action" aria-label="Show recommendations" title="Show recommendations" onClick={() => { selectRecommendationMode(rotation ? "rotation" : "exercise"); setView("recommendations"); }}><Sparkles /></button>
     {notice && <p className="notice" role="status">{notice}</p>}
     <ReadState loading={loadingExercises} error={error} hasData={exercisesLoaded} onRetry={() => setReadRetry((value) => value + 1)} loadingText="Loading exercises…" />
     <div className="exercise-results">
