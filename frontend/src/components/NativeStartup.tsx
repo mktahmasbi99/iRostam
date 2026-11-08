@@ -3,16 +3,25 @@ import { useEffect, useState } from "react";
 import { Backdrop, Logo } from "../App";
 
 interface Startup {
-  initialized: boolean;
+  state: "missing" | "empty" | "imported";
+  workouts?: number;
+  sets?: number;
+  photos?: number;
   today: string;
   timezone: string;
 }
 
-const ledger = registerPlugin<{ startup(options: { create: boolean }): Promise<Startup> }>("LocalLedger");
+const ledger = registerPlugin<{
+  startup(options: { create: boolean }): Promise<Startup>;
+  importBackup(): Promise<{ imported: boolean }>;
+}>("LocalLedger");
 
 export function NativeStartup() {
   const [request, setRequest] = useState({ create: false });
   const [result, setResult] = useState<Startup | string | null>(null);
+
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -45,6 +54,18 @@ export function NativeStartup() {
     setRequest({ create });
   };
 
+  const importBackup = async () => {
+    setImportError("");
+    setImporting(true);
+    try {
+      if ((await ledger.importBackup()).imported) load(false);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Could not import the Rostam backup.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return <>
     <Backdrop />
     <main className="startup">
@@ -55,10 +76,15 @@ export function NativeStartup() {
           <p className="error" role="alert">{result}</p>
           <button onClick={() => load(false)}>Retry</button>
         </> : <>
-          <p>{result.initialized ? "Local database ready." : "Set up local storage for iRostam."}</p>
+          <p>{result.state === "imported" ? "Rostam backup imported." : result.state === "empty" ? "Local database ready." : "Set up local storage for iRostam."}</p>
           <p>{result.today} · {result.timezone}</p>
-          {!result.initialized && <button onClick={() => load(true)}>Create local database</button>}
-          <p>Backup import and workout logging are planned for later test builds.</p>
+          {result.state === "imported" ? <p>{result.workouts} workouts · {result.sets} sets · {result.photos} progress photos</p> : <>
+            <button disabled={importing} onClick={() => void importBackup()}>Import Rostam backup</button>
+            {result.state === "missing" && <button disabled={importing} onClick={() => load(true)}>Create local database</button>}
+            {importing && <p role="status">Waiting for a backup from Files…</p>}
+            {importError && <p className="error" role="alert">{importError}</p>}
+          </>}
+          <p>Workout logging is planned for a later test build.</p>
         </>}
     </main>
   </>;
