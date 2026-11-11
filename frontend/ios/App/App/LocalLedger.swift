@@ -91,6 +91,13 @@ struct LocalLedger {
         }
     }
 
+    func exportSnapshot(to destination: URL) throws {
+        try snapshot(to: destination)
+        let size = try destination.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard (1...Self.backupLimit).contains(size) else { throw Failure.fileSize }
+        try validateSnapshot(destination)
+    }
+
     private func snapshot(to destination: URL) throws {
         try withDatabase(at: databaseURL, flags: SQLITE_OPEN_READONLY) { source in
             try withDatabase(at: destination, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) { target in

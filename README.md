@@ -48,6 +48,16 @@ Xcode using the same signing team and bundle identifier.
 
 ## Back up or move your ledger
 
+- **Automatic backups** are optional. In Settings, choose a folder in Files
+  (including iCloud Drive), then enable the switch. iRostam saves an initial
+  snapshot and checks on launch, when you return to the app, and after ledger
+  changes. It saves at most one changed snapshot per local calendar day; missed
+  days result in one current snapshot the next time you use the app. Retention
+  defaults to three backups and can be adjusted with the stepper. iRostam retains
+  only its own recognized automatic backup files in the chosen folder. Settings
+  lists direct `.sqlite3` files there, labeled Automatic or On-demand, without
+  scanning subfolders. Disabling backups leaves saved files in place. “Saved to folder” means the selected provider
+  accepted the file; cloud upload timing depends on that provider.
 - **Settings → Back Up Now** exports a `.sqlite3` snapshot, including your
   progress photos, to a location you choose in Files. Save a copy outside the app
   before deleting it, changing signing identity, or moving to another phone.
@@ -56,6 +66,9 @@ Xcode using the same signing team and bundle identifier.
   app, export a backup from Rostam and open that file on your iPhone.
 - Restoring replaces the local ledger. If a previous ledger was saved during
   restore, **Restore Previous Ledger** lets you recover it.
+- To restore an automatic backup, choose its `.sqlite3` file using **Settings →
+  Restore from Files**. Automatic backups use the same validated SQLite format
+  as manual exports.
 
 ## Development
 

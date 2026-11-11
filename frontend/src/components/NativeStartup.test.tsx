@@ -3,14 +3,50 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { NativeStartup } from "./NativeStartup";
 
-const { startup, importBackup, history, exportBackup } = vi.hoisted(() => ({
-  startup: vi.fn(), importBackup: vi.fn(), history: vi.fn(), exportBackup: vi.fn(),
+const { startup, importBackup, history, exportBackup, automaticBackupStatus, listAutomaticBackups, chooseBackupFolder, setAutomaticBackup } = vi.hoisted(() => ({
+  startup: vi.fn(), importBackup: vi.fn(), history: vi.fn(), exportBackup: vi.fn(), automaticBackupStatus: vi.fn(), listAutomaticBackups: vi.fn(), chooseBackupFolder: vi.fn(), setAutomaticBackup: vi.fn(),
 }));
-vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true }, registerPlugin: () => ({ startup, importBackup, history, exportBackup }) }));
+vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true }, registerPlugin: () => ({ startup, importBackup, history, exportBackup, automaticBackupStatus, listAutomaticBackups, chooseBackupFolder, setAutomaticBackup }) }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  automaticBackupStatus.mockResolvedValue({ enabled: false, retention: 3, lastSaved: null, error: null, hasFolder: false, folderName: null });
+  listAutomaticBackups.mockResolvedValue({ files: [] });
+  chooseBackupFolder.mockResolvedValue({ enabled: false, retention: 3, lastSaved: null, error: null, hasFolder: true, folderName: "Documents" });
+  setAutomaticBackup.mockImplementation(async (options) => ({ ...options, lastSaved: "2026-11-11T10:00:00Z", error: null, hasFolder: true, folderName: "Documents" }));
   history.mockResolvedValue({ date: "2026-11-08", sections: [], workouts: [] });
+});
+
+it("chooses a folder before enabling automatic backups and saves the retention choice", async () => {
+  startup.mockResolvedValue({ today: "2026-11-11", timezone: "Europe/Warsaw", state: "imported", workouts: 1, sets: 2, photos: 0 });
+  const user = userEvent.setup();
+  render(<NativeStartup />);
+  await user.click(await screen.findByRole("button", { name: "Settings" }));
+  expect(screen.getByRole("button", { name: "Increase backup retention" })).toBeDisabled();
+  await user.click(await screen.findByRole("switch", { name: "Automatic backups" }));
+  expect(chooseBackupFolder).toHaveBeenCalledOnce();
+  expect(setAutomaticBackup).toHaveBeenCalledWith({ enabled: true, retention: 3 });
+  expect(await screen.findByText("Folder saved")).toBeVisible();
+  expect(await screen.findByText("Folder: Documents", {}, { timeout: 2500 })).toBeVisible();
+  expect(await screen.findByText(/Saved to folder/)).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Decrease backup retention" }));
+  expect(setAutomaticBackup).toHaveBeenLastCalledWith({ enabled: true, retention: 2 });
+  await user.click(screen.getByRole("button", { name: "Increase backup retention" }));
+  expect(setAutomaticBackup).toHaveBeenLastCalledWith({ enabled: true, retention: 3 });
+});
+
+it("labels direct backup files and lists them without traversing folders", async () => {
+  startup.mockResolvedValue({ today: "2026-11-11", timezone: "Europe/Warsaw", state: "imported", workouts: 1, sets: 2, photos: 0 });
+  listAutomaticBackups.mockResolvedValue({ files: [
+    { name: "iRostam-auto-install-20261111.sqlite3", category: "Automatic", modifiedAt: null, sizeBytes: 1024 },
+    { name: "iRostam-20261111T100000-ABC.sqlite3", category: "On-demand", modifiedAt: null, sizeBytes: 1024 },
+  ] });
+  render(<NativeStartup />);
+  await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+  expect(await screen.findByText("Auto")).toBeVisible();
+  expect(screen.queryByText("iRostam-auto-install-20261111.sqlite3")).not.toBeInTheDocument();
+  expect(screen.queryByText("iRostam-20261111T100000-ABC.sqlite3")).not.toBeInTheDocument();
+  expect(screen.getByText("On-demand")).toBeVisible();
 });
 
 it("offers fresh setup or backup restore before opening Today", async () => {
