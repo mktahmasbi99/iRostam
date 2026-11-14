@@ -1,5 +1,8 @@
 # iRostam
 
+**Discontinued:** Apple’s developer signing restrictions, including seven-day expiry for free accounts and recurring re-signing requirements, make continued development impractical.
+Development continues in [Rostam](https://github.com/mktahmasbi99/Rostam), the web-based app.
+
 iRostam is a private, offline exercise ledger for iPhone, based on the
 [Rostam web app](https://github.com/mktahmasbi99/Rostam). It stores your ledger
 in SQLite on your phone. You can record and review your data without an account,
