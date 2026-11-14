@@ -15,10 +15,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         return true
     }
 
-    #if DEBUG
-    private func scheduleSigningReminder() {
+    static var signingExpiry: Date? {
         guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
-              let profile = try? Data(contentsOf: url) else { return }
+              let profile = try? Data(contentsOf: url) else { return nil }
 
         // shortcut: reads the profile's legacy XML payload, revisit if Xcode stops embedding it.
         guard let start = profile.range(of: Data("<?xml".utf8)),
@@ -26,8 +25,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
               let plist = try? PropertyListSerialization.propertyList(
                 from: profile[start.lowerBound..<end.upperBound], options: [], format: nil
               ) as? [String: Any],
-              let expiry = plist["ExpirationDate"] as? Date,
-              expiry.timeIntervalSinceNow > 0 else { return }
+              let expiry = plist["ExpirationDate"] as? Date else { return nil }
+        return expiry
+    }
+
+    #if DEBUG
+    private func scheduleSigningReminder() {
+        guard let expiry = Self.signingExpiry, expiry.timeIntervalSinceNow > 0 else { return }
 
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in

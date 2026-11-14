@@ -8,6 +8,7 @@ export interface NativeStartupState {
   hasRecoveryBackup?: boolean;
   today: string;
   timezone: string;
+  signingExpiresAt?: string | null;
 }
 export interface AutomaticBackupStatus { enabled: boolean; retention: number; lastSaved: string | null; error: string | null; hasFolder: boolean; folderName: string | null; }
 export interface NativeBackupFile { name: string; category: "Automatic" | "On-demand"; modifiedAt: string | null; sizeBytes: number; }

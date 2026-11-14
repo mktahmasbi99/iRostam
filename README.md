@@ -43,7 +43,9 @@ or switching to a different app identity can leave its local ledger inaccessible
 
 With a free Xcode Personal Team, the signing profile expires after seven days.
 The Debug build can schedule a local reminder 24 hours before the profile expires
-if you allow notifications. To renew the installation, run the app again from
+if you allow notifications. Settings → App expiry shows the remaining days and
+expiry date from the same signing profile, even if notifications are disabled.
+To renew the installation, run the app again from
 Xcode using the same signing team and bundle identifier.
 
 ## Back up or move your ledger

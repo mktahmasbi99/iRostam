@@ -61,7 +61,8 @@ class LocalLedgerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
                 var result: [String: Any] = [
                     "state": state.rawValue,
                     "today": formatter.string(from: Date()),
-                    "timezone": timezone.identifier
+                    "timezone": timezone.identifier,
+                    "signingExpiresAt": AppDelegate.signingExpiry.map { ISO8601DateFormatter().string(from: $0) } as Any? ?? NSNull()
                 ]
                 if state == .imported {
                     try ledger.prepareWorkouts()

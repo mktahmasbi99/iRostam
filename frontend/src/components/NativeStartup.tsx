@@ -5,6 +5,7 @@ import { nativeLedger, type AutomaticBackupStatus, type NativeBackupFile, type N
 import { applyThemePreference, readThemePreference, saveThemePreference, systemThemeQuery, type ThemePreference } from "../lib/theme";
 import { NativeHistory } from "./NativeHistory";
 import { Modal } from "./Modal";
+import { SigningExpiry } from "./SigningExpiry";
 
 type BackupAction = "import" | "export" | "restore" | "recovery" | "create";
 
@@ -140,6 +141,7 @@ export function NativeStartup() {
         <section className="settings-card appearance-settings"><div><h2>Appearance</h2><p>Choose how iRostam looks.</p></div><div className="segmented appearance-options" role="group" aria-label="Theme">
           {(["system", "light", "dark"] as const).map((preference) => <button key={preference} type="button" className={themePreference === preference ? "selected" : ""} aria-pressed={themePreference === preference} onClick={() => changeThemePreference(preference)}>{preference[0].toUpperCase() + preference.slice(1)}</button>)}
         </div></section>
+        <SigningExpiry expiresAt={result.signingExpiresAt} />
         <section className="settings-card"><h2>Backups and local storage</h2>
           {autoBackup && <div className="stack"><label className={`native-auto-backup-toggle${autoBackup.enabled ? " is-enabled" : ""}`}><input type="checkbox" role="switch" aria-checked={autoBackup.enabled} checked={autoBackup.enabled} onChange={(event) => void updateAuto(event.target.checked)} /> Automatic backups</label>
             <div className="native-backup-folder-row"><div className={`native-backup-folder-status${folderSaved ? " folder-saved" : autoBackup.hasFolder ? " folder-set" : ""}`} role="status" aria-live="polite">{folderSaved ? <><Check aria-hidden="true" />Folder saved</> : autoBackup.folderName ? `Folder: ${autoBackup.folderName}` : "No automatic backup folder selected"}</div><button className="secondary" onClick={() => void chooseAutoFolder()}>{autoBackup.hasFolder ? "Change folder" : "Choose folder"}</button></div>

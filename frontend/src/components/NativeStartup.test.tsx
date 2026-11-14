@@ -104,3 +104,12 @@ it("keeps backup import and restore actions in Settings", async () => {
   await user.click(within(dialog).getByRole("button", { name: "Choose Backup" }));
   expect(importBackup).toHaveBeenCalledExactlyOnceWith({ replacing: true });
 });
+
+it("shows the installed signing profile expiry in Settings", async () => {
+  const expiresAt = "2026-11-21T12:00:00Z";
+  startup.mockResolvedValue({ today: "2026-11-14", timezone: "Europe/Warsaw", state: "imported", signingExpiresAt: expiresAt });
+  const { container } = render(<NativeStartup />);
+  await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+  expect(screen.getByRole("heading", { name: "App expiry" })).toBeVisible();
+  expect(container.querySelector("time")).toHaveAttribute("datetime", expiresAt);
+});
